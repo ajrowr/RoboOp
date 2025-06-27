@@ -1,16 +1,31 @@
 import anthropic
 
-API_KEY_FILE = '/Users/alandatech/Research/2025/06-Claude/api_key.txt'
+API_KEY_FILE = None ## If you want to load it from a file
+API_KEY_ENV_VAR = None ## If you want to use a different env var instead of ANTHROPIC_API_KEY
 
-MODEL_SONNET4 = 'claude-sonnet-4-20250514'
+from .models import MODELS
+
+def _get_api_key():
+    if API_KEY_FILE:
+        return open(API_KEY_FILE).read()
+    elif API_KEY_ENV_VAR:
+        import os
+        return os.environ[API_KEY_ENV_VAR]
+    ## If neither, then returning None will let Anthropic check its default of ANTHROPIC_API_KEY
 
 
 class Bot(object):
-    __slots__ = ['fields', 'sysprompt_path', 'client', 'model', 'temperature']
+    __slots__ = ['fields', 'sysprompt_path', 'sysprompt_text', 'client', 'model', 
+            'temperature', 'max_tokens']
     
     @property
     def sysprompt_clean(self):
-        return open(self.sysprompt_path).read()
+        if hasattr(self, 'sysprompt_text'):
+            return self.sysprompt_text
+        elif hasattr(self, 'sysprompt_path'):
+            return open(self.sysprompt_path).read()
+        else:
+            return ''
     
     def sysprompt_vec(self, argv):
         sysp = self.sysprompt_clean
@@ -19,9 +34,18 @@ class Bot(object):
         return sysp
     
     def __init__(self, client=None):
+        for f, v in [('model', MODELS.CLAUDE_4.SONNET), ('temperature', 1), ('fields', []), 
+                    ('max_tokens', 20000)]:
+            if not hasattr(self, f):
+                setattr(self, f, v)
         if not client:
-            client = anthropic.Anthropic(api_key=open(API_KEY_FILE).read())
+            client = anthropic.Anthropic(api_key=_get_api_key())
         self.client = client
+    
+    @classmethod
+    def with_api_key(klass, api_key):
+        client = anthropic.Anthropic(api_key=api_key)
+        return klass(client)
 
 
 class StreamWrapper:
@@ -54,16 +78,18 @@ class StreamWrapper:
 class Conversation(object):
     __slots__ = ['messages', 'bot', 'sysprompt', 'argv', 'max_tokens', 'message_objects', 
                 'is_streaming', 'started']
-    def __init__(self, bot, stream=False):
-        self.max_tokens = 20000
+    def __init__(self, bot, stream=False, argv=None):
         if type(bot) is type:
             self.bot = bot()
         else:
             self.bot = bot
+        self.max_tokens = self.bot.max_tokens
         self.messages = []
         self.message_objects = []
         self.is_streaming = stream
         self.started = False
+        if argv is not None:
+            self.prestart(argv)
         # self.is_async = is_async
     
     def _make_text_message(self, role, content):
@@ -80,7 +106,11 @@ class Conversation(object):
         self.sysprompt = self.bot.sysprompt_vec(argv)
         self.started = True
     
-    def start(self, argv, message):
+    def start(self, *args):
+        if type(args[0]) is list:
+            argv, message = args
+        else:
+            argv, message = [], args[0]
         if self.started:
             raise Exception('Conversation has already started')
             
@@ -88,10 +118,10 @@ class Conversation(object):
         return self.resume(message)
     
     async def astart(self, message):
-        ...
+        raise NotImplementedError()
     
     async def aresume(self, message):
-        ...
+        raise NotImplementedError()
     
     def resume(self, message):
         if self.is_streaming:
@@ -131,4 +161,4 @@ def streamer(bot, args):
     return streamit
 
 
-__all__ = ['Bot', 'Conversation', 'streamer']
+__all__ = ['Bot', 'Conversation', 'streamer', 'MODELS']
