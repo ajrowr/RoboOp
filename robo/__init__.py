@@ -150,7 +150,7 @@ class Conversation(object):
         return message_out
         
 
-def streamer(bot, args):
+def streamer(bot, args=[]):
     convo = Conversation(bot, stream=True)
     def streamit(message):
         if not convo.started:
