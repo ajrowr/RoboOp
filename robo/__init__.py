@@ -78,7 +78,7 @@ class StreamWrapper:
 class Conversation(object):
     __slots__ = ['messages', 'bot', 'sysprompt', 'argv', 'max_tokens', 'message_objects', 
                 'is_streaming', 'started']
-    def __init__(self, bot, stream=False, argv=None):
+    def __init__(self, bot, argv=None, stream=False):
         if type(bot) is type:
             self.bot = bot()
         else:
