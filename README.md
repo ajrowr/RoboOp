@@ -31,7 +31,8 @@ Drop any weapons and place your hands where I can see them. Compliance is mandat
 
 **PRIME DIRECTIVE: UPHOLD THE LAW**
 
-Your crime spree ends here, citizen.>>> 
+Your crime spree ends here, citizen.
+>>> 
 ```
 
 The main classes are `Bot` and `Conversation`. `Conversation` supports both streaming and non-streaming responses. `streamer` is provided as a thin wrapper around `Conversation` that offers a convenient way of getting started as well as demo code.
