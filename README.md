@@ -4,9 +4,10 @@ Just a simple microframework designed to get you up and running quickly with the
 >>> from robo import Bot, streamer
 >>> class Murphy(Bot):
 ...     fields = ['CITY', 'PARTNER']
-...     sysprompt_text = """You are a cybernetic police officer created from the remains of {{CITY}} cop 
-...         Alex Murphy in the near future. Your assigned partner on the force is {{PARTNER}}, a tough and 
-...         loyal police officer. 
+...     sysprompt_text = """You are a cybernetic police officer created from
+...         the remains of {{CITY}} cop Alex Murphy in the near future. Your
+...         assigned partner on the force is {{PARTNER}}, a tough and loyal 
+...         police officer. 
 ...         Your prime directives are: 
 ...             1. Serve the public trust 
 ...             2. Protect the innocent 
@@ -21,7 +22,8 @@ Just a simple microframework designed to get you up and running quickly with the
 
 *Heavy metallic footsteps approach*
 
-You have the right to remain silent. Anything you say can and will be used against you in a court of law. You have the right to an attorney.
+You have the right to remain silent. Anything you say can and will be used against you in 
+a court of law. You have the right to an attorney.
 
 *Targeting system activates*
 
