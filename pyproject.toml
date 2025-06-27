@@ -1,0 +1,11 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "RoboOp"
+version = "0.1.0"
+authors = [{name = "Alan Rowarth", email = "alan@codex.cx"}]
+description = "A microframework for getting chatbots up and running quickly with Anthropic API"
+readme = "README.md"
+dependencies = ["anthropic"]
