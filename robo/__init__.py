@@ -13,6 +13,10 @@ def _get_api_key():
         return os.environ[API_KEY_ENV_VAR]
     ## If neither, then returning None will let Anthropic check its default of ANTHROPIC_API_KEY
 
+def _get_client_class(async_mode=False):
+    if async_mode:
+        return anthropic.AsyncAnthropic
+    return anthropic.Anthropic
 
 class Bot(object):
     __slots__ = ['fields', 'sysprompt_path', 'sysprompt_text', 'client', 'model', 
@@ -33,18 +37,18 @@ class Bot(object):
             sysp = sysp.replace(f'{{{{{k}}}}}', v)
         return sysp
     
-    def __init__(self, client=None):
+    def __init__(self, client=None, async_mode=False):
         for f, v in [('model', MODELS.CLAUDE_4.SONNET), ('temperature', 1), ('fields', []), 
                     ('max_tokens', 20000)]:
             if not hasattr(self, f):
                 setattr(self, f, v)
         if not client:
-            client = anthropic.Anthropic(api_key=_get_api_key())
+            client = _get_client_class(async_mode)(api_key=_get_api_key())
         self.client = client
     
     @classmethod
-    def with_api_key(klass, api_key):
-        client = anthropic.Anthropic(api_key=api_key)
+    def with_api_key(klass, api_key, async_mode=False):
+        client = _get_client_class(async_mode)(api_key=api_key)
         return klass(client)
 
 
@@ -75,12 +79,40 @@ class StreamWrapper:
             yield text
 
 
+class AsyncStreamWrapper:
+    def __init__(self, stream, conversation_obj):
+        self.stream = stream
+        self.conversation_obj = conversation_obj
+        self.accumulated_text = ""
+        self.chunks = []
+    
+    async def __aenter__(self):
+        self.stream_context = await self.stream.__aenter__()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        result = await self.stream.__aexit__(exc_type, exc_val, exc_tb)
+        if exc_type is None and self.accumulated_text:
+            asst_message = self.conversation_obj._make_text_message('assistant', self.accumulated_text)
+            self.conversation_obj.messages.append(asst_message)
+        
+        return result
+    
+    @property
+    async def text_stream(self):
+        async for text in self.stream_context.text_stream:
+            self.chunks.append(text)
+            self.accumulated_text += text
+            yield text
+
+
 class Conversation(object):
     __slots__ = ['messages', 'bot', 'sysprompt', 'argv', 'max_tokens', 'message_objects', 
-                'is_streaming', 'started']
-    def __init__(self, bot, argv=None, stream=False):
+                'is_streaming', 'started', 'is_async']
+    def __init__(self, bot, argv=None, stream=False, async_mode=False):
+        self.is_async = async_mode
         if type(bot) is type:
-            self.bot = bot()
+            self.bot = bot(async_mode=async_mode)
         else:
             self.bot = bot
         self.max_tokens = self.bot.max_tokens
@@ -90,7 +122,6 @@ class Conversation(object):
         self.started = False
         if argv is not None:
             self.prestart(argv)
-        # self.is_async = is_async
     
     def _make_text_message(self, role, content):
         return {
@@ -116,13 +147,45 @@ class Conversation(object):
             
         self.prestart(argv)
         return self.resume(message)
-    
-    async def astart(self, message):
-        raise NotImplementedError()
-    
+
+    async def astart(self, *args):
+        if type(args[0]) is list:
+            argv, message = args
+        else:
+            argv, message = [], args[0]
+        if self.started:
+            raise Exception('Conversation has already started')
+        
+        self.prestart(argv)
+        return await self.aresume(message)
+
     async def aresume(self, message):
-        raise NotImplementedError()
-    
+        if self.is_streaming:
+            return await self._aresume_stream(message)
+        else:
+            return await self._aresume_flat(message)
+
+    async def _aresume_stream(self, message):
+        self.messages.append(self._make_text_message('user', message))
+        # Remove 'await' here - stream() returns AsyncMessageStreamManager directly
+        stream = self.bot.client.messages.stream(
+            model=self.bot.model, max_tokens=self.max_tokens,
+            temperature=self.bot.temperature, system=self.sysprompt,
+            messages=self.messages
+        )
+        return AsyncStreamWrapper(stream, self)
+
+    async def _aresume_flat(self, message):
+        self.messages.append(self._make_text_message('user', message))
+        message_out = await self.bot.client.messages.create(
+            model=self.bot.model, max_tokens=self.max_tokens,
+            temperature=self.bot.temperature, system=self.sysprompt,
+            messages=self.messages
+        )
+        self.message_objects.append(message_out)
+        self.messages.append(self._make_text_message('assistant', message_out.content[0].text))
+        return message_out
+
     def resume(self, message):
         if self.is_streaming:
             return self._resume_stream(message)
@@ -160,5 +223,23 @@ def streamer(bot, args=[]):
                 print(chunk, end="", flush=True)
     return streamit
 
+def streamer_async(bot, args=[]):
+    convo = Conversation(bot, stream=True, async_mode=True)
+    async def streamit(message):
+        if not convo.started:
+            convo.prestart(args)
+        async with await convo.aresume(message) as stream:
+            async for chunk in stream.text_stream:
+                print(chunk, end="", flush=True)
+    return streamit
 
-__all__ = ['Bot', 'Conversation', 'streamer', 'MODELS']
+"""
+To use streamer_async :
+>>> import asyncio
+>>> from robo import *
+>>> say = streamer_async(Bot)
+>>> coro = say('who goes there?')
+>>> asyncio.run(coro)    
+"""
+
+__all__ = ['Bot', 'Conversation', 'streamer', 'streamer_async', 'MODELS']

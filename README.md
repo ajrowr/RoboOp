@@ -45,12 +45,12 @@ More detailed general use (without `streamer`):
 from robo import Bot, Conversation
 convo = Conversation(Bot, stream=False) ## Defaults to Claude Sonnet 4 with a blank system prompt
 convo.start("Hi, what's your name?")
-... # a response object ensues
+... # a Message object ensues
 convo.resume("Claude, you're so dreamy")
-... # another response object
+... # another Message object
 ```
 
-In this case the return value is an Anthropic `Message` object whose contents can be accessed as `response.content[0].text`. The conversation history is automatically updated and can be found in `convo.messages`. (Note: for streaming responses the conversation isn't updated with the model response
+In this case the return value is an `anthropic.types.message.Message` object whose contents can be accessed as `message.content[0].text`. The conversation history is automatically updated and can be found in `convo.messages`. (Note: for streaming responses the conversation isn't updated with the model response
 until the stream finishes being consumed by your code, so keep an eye on that!) Note that `stream` defaults to False, but it's explicated here for demonstration purposes.
 
 Now for an example with a system prompt, interpolable fields and a specific model:
@@ -67,9 +67,9 @@ class Animal(Bot):
 
 convo = Conversation(Animal)
 convo.start(['tabby cat'], "Hey there kitty, what a cutie! Are you hungry?")
-... # response object
+... # Message object
 convo.resume("Aww, you just want some scritches don't you? Scritchy scritchy scritch")
-... # response object
+... # Message object
 ```
 
 Notice that `start()` will accept a message as the first and only argument, OR a vector of variables for interpolation in the sysprompt as the first argument and _then_ the message as second arg. This is a deliberate decision for convenience but if you don't like it then you can use `convo.prestart(interpolation_variables)` followed by `convo.resume(message)` to initiate things more "formally". Or you can do like this:
