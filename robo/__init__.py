@@ -20,7 +20,7 @@ def _get_client_class(async_mode=False):
 
 class Bot(object):
     __slots__ = ['fields', 'sysprompt_path', 'sysprompt_text', 'client', 'model', 
-            'temperature', 'max_tokens']
+            'temperature', 'max_tokens', 'oneshot']
     
     @property
     def sysprompt_clean(self):
@@ -39,7 +39,7 @@ class Bot(object):
     
     def __init__(self, client=None, async_mode=False):
         for f, v in [('model', MODELS.CLAUDE_4.SONNET), ('temperature', 1), ('fields', []), 
-                    ('max_tokens', 20000)]:
+                    ('max_tokens', 20000), ('oneshot', False)]:
             if not hasattr(self, f):
                 setattr(self, f, v)
         if not client:
@@ -108,7 +108,7 @@ class AsyncStreamWrapper:
 
 class Conversation(object):
     __slots__ = ['messages', 'bot', 'sysprompt', 'argv', 'max_tokens', 'message_objects', 
-                'is_streaming', 'started', 'is_async']
+                'is_streaming', 'started', 'is_async', 'oneshot']
     def __init__(self, bot, argv=None, stream=False, async_mode=False):
         self.is_async = async_mode
         if type(bot) is type:
@@ -116,6 +116,7 @@ class Conversation(object):
         else:
             self.bot = bot
         self.max_tokens = self.bot.max_tokens
+        self.oneshot = self.bot.oneshot
         self.messages = []
         self.message_objects = []
         self.is_streaming = stream
@@ -131,6 +132,10 @@ class Conversation(object):
                 'text': content
             }]
         }
+    
+    def _get_conversation_context(self):
+        """Oneshot is for bots that don't need conversational context"""
+        return [self.messages[-1]] if self.oneshot else self.messages
     
     def prestart(self, argv):
         self.argv = argv
@@ -171,7 +176,7 @@ class Conversation(object):
         stream = self.bot.client.messages.stream(
             model=self.bot.model, max_tokens=self.max_tokens,
             temperature=self.bot.temperature, system=self.sysprompt,
-            messages=self.messages
+            messages=self._get_conversation_context()
         )
         return AsyncStreamWrapper(stream, self)
 
@@ -180,7 +185,7 @@ class Conversation(object):
         message_out = await self.bot.client.messages.create(
             model=self.bot.model, max_tokens=self.max_tokens,
             temperature=self.bot.temperature, system=self.sysprompt,
-            messages=self.messages
+            messages=self._get_conversation_context()
         )
         self.message_objects.append(message_out)
         self.messages.append(self._make_text_message('assistant', message_out.content[0].text))
@@ -197,7 +202,7 @@ class Conversation(object):
         stream = self.bot.client.messages.stream(
             model=self.bot.model, max_tokens=self.max_tokens,
             temperature=self.bot.temperature, system=self.sysprompt,
-            messages=self.messages
+            messages=self._get_conversation_context()
         )
         return StreamWrapper(stream, self)
     
@@ -206,7 +211,7 @@ class Conversation(object):
         message_out = self.bot.client.messages.create(
             model=self.bot.model, max_tokens=self.max_tokens,
             temperature=self.bot.temperature, system=self.sysprompt,
-            messages=self.messages
+            messages=self._get_conversation_context()
         )
         self.message_objects.append(message_out)
         self.messages.append(self._make_text_message('assistant', message_out.content[0].text))
