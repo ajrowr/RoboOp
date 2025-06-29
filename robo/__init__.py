@@ -216,7 +216,51 @@ class Conversation(object):
         self.message_objects.append(message_out)
         self.messages.append(self._make_text_message('assistant', message_out.content[0].text))
         return message_out
+
+
+class ConversationWithFiles(Conversation):
+    """This is experimental and needs work. Currently no async and no streaming. 
+    Right now to use it you need to bypass resume() like:
+        c = robo.ConversationWithFiles(Classifier, [])
+        withjpeg = lambda fpath: c._resume_flat(None, [('image/jpeg', fpath)])
+        withpng = lambda fpath: c._resume_flat(None, [('image/png', fpath)])
+    """
+    
+    def _make_message_with_images(self, role, message, filespecs=[]):
+        import base64
+        content = []
+        for ctype, fpath in filespecs:
+            with open(fpath, 'rb') as inputfile:
+                content.append({
+                    'type': 'image',
+                    'source': {
+                        'type': 'base64',
+                        'media_type': ctype,
+                        'data': base64.b64encode(inputfile.read()).decode('utf-8')
+                    }
+                })
+        if message:
+            content.append({'type': 'text', 'text': message})
+        return {'role': role, 'content': content}
         
+    def _resume_flat(self, message, filespecs=[]):
+        """filespecs are (content_type, filepath)"""
+        if filespecs:
+            self.messages.append(self._make_message_with_images('user', message, filespecs))
+        else:
+            self.messages.append(self._make_text_message('user', message))
+        ## rest is the same
+        message_out = self.bot.client.messages.create(
+            model=self.bot.model, max_tokens=self.max_tokens,
+            temperature=self.bot.temperature, system=self.sysprompt,
+            messages=self._get_conversation_context()
+        )
+        self.message_objects.append(message_out)
+        self.messages.append(self._make_text_message('assistant', message_out.content[0].text))
+        return message_out
+        
+        
+
 
 def streamer(bot, args=[]):
     convo = Conversation(bot, stream=True)
