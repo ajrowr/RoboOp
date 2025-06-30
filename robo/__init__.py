@@ -1,15 +1,22 @@
 import anthropic
 
-API_KEY_FILE = None ## If you want to load it from a file
+from .models import MODELS
+
+from pathlib import Path
+import os
+import json
+import datetime
+import time
+
+
+API_KEY_FILE = None ## If you want to load it from a file 
 API_KEY_ENV_VAR = None ## If you want to use a different env var instead of ANTHROPIC_API_KEY
 
-from .models import MODELS
 
 def _get_api_key():
     if API_KEY_FILE:
         return open(API_KEY_FILE).read()
     elif API_KEY_ENV_VAR:
-        import os
         return os.environ[API_KEY_ENV_VAR]
     ## If neither, then returning None will let Anthropic check its default of ANTHROPIC_API_KEY
 
@@ -68,6 +75,7 @@ class StreamWrapper:
         if exc_type is None and self.accumulated_text:
             asst_message = self.conversation_obj._make_text_message('assistant', self.accumulated_text)
             self.conversation_obj.messages.append(asst_message)
+            self.conversation_obj._post_stream_hook()
         
         return result
     
@@ -95,6 +103,7 @@ class AsyncStreamWrapper:
         if exc_type is None and self.accumulated_text:
             asst_message = self.conversation_obj._make_text_message('assistant', self.accumulated_text)
             self.conversation_obj.messages.append(asst_message)
+            await self.conversation_obj._post_stream_hook_async()
         
         return result
     
@@ -216,6 +225,60 @@ class Conversation(object):
         self.message_objects.append(message_out)
         self.messages.append(self._make_text_message('assistant', message_out.content[0].text))
         return message_out
+    
+    def _post_stream_hook(self):
+        pass
+    
+    async def _post_stream_hook_async(self):
+        pass
+
+
+class LoggedConversation(Conversation):
+    __slots__ = ['conversation_id', 'logs_dir']
+    def __init__(self, bot, **kwargs):
+        if 'conversation_id' in kwargs:
+            self.conversation_id = kwargs.pop('conversation_id')
+        else:
+            import uuid
+            self.conversation_id = str(uuid.uuid4())
+        
+        if 'logs_dir' in kwargs:
+            self.logs_dir = kwargs.pop('logs_dir')
+        else:
+            self.logs_dir = None
+        
+        super().__init__(bot, **kwargs)
+    
+    def _logfolder_path(self):
+        dirname = f"{int(time.time()/10):x}__{self.conversation_id}"
+        return Path(self.logs_dir / dirname)
+    
+    def _write_log(self):
+        if self.logs_dir:
+            logdir = self._logfolder_path()
+            logdir.mkdir(parents=True, exist_ok=True)
+            with open(logdir / 'conversation.json', 'w') as logfile:
+                json.dump({
+                    'when': str(datetime.datetime.now()),
+                    'with': type(self.bot).__name__,
+                    'messages': self.messages
+                }, logfile, indent=4)
+    
+    def resume(self, message):
+        resp = super().resume(message)
+        self._write_log()
+        return resp
+    
+    async def aresume(self, message):
+        resp = await super().aresume(message)
+        self._write_log()
+        return resp
+    
+    def _post_stream_hook(self):
+        self._write_log()
+    
+    async def _post_stream_hook_async(self):
+        self._write_log()
 
 
 class ConversationWithFiles(Conversation):
@@ -258,8 +321,6 @@ class ConversationWithFiles(Conversation):
         self.message_objects.append(message_out)
         self.messages.append(self._make_text_message('assistant', message_out.content[0].text))
         return message_out
-        
-        
 
 
 def streamer(bot, args=[]):
