@@ -132,6 +132,9 @@ class Conversation(object):
         self.started = False
         if argv is not None:
             self.prestart(argv)
+            self.argv = argv
+        else:
+            self.argv = []
     
     def _make_text_message(self, role, content):
         return {
@@ -234,7 +237,7 @@ class Conversation(object):
 
 
 class LoggedConversation(Conversation):
-    __slots__ = ['conversation_id', 'logs_dir']
+    __slots__ = ['conversation_id', 'logs_dir', 'first_saved_at']
     def __init__(self, bot, **kwargs):
         if 'conversation_id' in kwargs:
             self.conversation_id = kwargs.pop('conversation_id')
@@ -246,12 +249,15 @@ class LoggedConversation(Conversation):
             self.logs_dir = kwargs.pop('logs_dir')
         else:
             self.logs_dir = None
+        self.first_saved_at = None
         
         super().__init__(bot, **kwargs)
     
     def _logfolder_path(self):
-        dirname = f"{int(time.time()/10):x}__{self.conversation_id}"
-        return Path(self.logs_dir / dirname)
+        if self.first_saved_at is None:
+            self.first_saved_at = int(time.time()/10)
+        dirname = f"{self.first_saved_at:x}__{self.conversation_id}"
+        return Path(self.logs_dir) / dirname
     
     def _write_log(self):
         if self.logs_dir:
@@ -261,6 +267,7 @@ class LoggedConversation(Conversation):
                 json.dump({
                     'when': str(datetime.datetime.now()),
                     'with': type(self.bot).__name__,
+                    'argv': self.argv,
                     'messages': self.messages
                 }, logfile, indent=4)
     
@@ -279,6 +286,21 @@ class LoggedConversation(Conversation):
     
     async def _post_stream_hook_async(self):
         self._write_log()
+    
+    @classmethod
+    def revive(klass, bot, conversation_id, logs_dir, argv, **kwargs):
+        revenant = klass(bot, conversation_id=conversation_id, logs_dir=logs_dir, **kwargs)
+        ## Find the chatlog to continue the conversation
+        try:
+            logdir_candidate = list(filter(lambda f: f.endswith(conversation_id), os.listdir(logs_dir)))[0]
+        except IndexError as exc:
+            raise Exception("Conversation with ID {conversation_id} could not be found") from exc
+        revenant.first_saved_at = int(logdir_candidate.split('__')[0], 16)
+        with (Path(logs_dir) / logdir_candidate / 'conversation.json').open('r') as reader:
+            logdata = json.load(reader)
+        revenant.messages = logdata['messages']
+        revenant.prestart(argv)
+        return revenant
 
 
 class ConversationWithFiles(Conversation):
