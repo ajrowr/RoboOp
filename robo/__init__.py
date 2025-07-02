@@ -1,6 +1,7 @@
 import anthropic
 
 from .models import MODELS
+from .exceptions import *
 
 from pathlib import Path
 import os
@@ -27,10 +28,17 @@ def _get_client_class(async_mode=False):
 
 class Bot(object):
     __slots__ = ['fields', 'sysprompt_path', 'sysprompt_text', 'client', 'model', 
-            'temperature', 'max_tokens', 'oneshot']
+            'temperature', 'max_tokens', 'oneshot', 'welcome_message']
+    
+    def sysprompt_generate(self):
+        raise NotImplementedError("This method is not implemented")
     
     @property
     def sysprompt_clean(self):
+        try:
+            return self.sysprompt_generate()
+        except NotImplementedError:
+            pass
         if hasattr(self, 'sysprompt_text'):
             return self.sysprompt_text
         elif hasattr(self, 'sysprompt_path'):
@@ -46,7 +54,7 @@ class Bot(object):
     
     def __init__(self, client=None, async_mode=False):
         for f, v in [('model', MODELS.CLAUDE_4.SONNET), ('temperature', 1), ('fields', []), 
-                    ('max_tokens', 20000), ('oneshot', False)]:
+                    ('max_tokens', 20000), ('oneshot', False), ('welcome_message', None)]:
             if not hasattr(self, f):
                 setattr(self, f, v)
         if not client:
@@ -253,6 +261,9 @@ class LoggedConversation(Conversation):
         
         super().__init__(bot, **kwargs)
     
+    def __repr__(self):
+        return f'<{type(self).__name__} with ID {self.conversation_id}>'
+    
     def _logfolder_path(self):
         if self.first_saved_at is None:
             self.first_saved_at = int(time.time()/10)
@@ -294,7 +305,8 @@ class LoggedConversation(Conversation):
         try:
             logdir_candidate = list(filter(lambda f: f.endswith(conversation_id), os.listdir(logs_dir)))[0]
         except IndexError as exc:
-            raise Exception("Conversation with ID {conversation_id} could not be found") from exc
+            excmsg = f"Conversation with ID {conversation_id} could not be found"
+            raise UnknownConversationException(excmsg) from exc
         revenant.first_saved_at = int(logdir_candidate.split('__')[0], 16)
         with (Path(logs_dir) / logdir_candidate / 'conversation.json').open('r') as reader:
             logdata = json.load(reader)
