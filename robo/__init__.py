@@ -50,6 +50,16 @@ class Bot(object):
         else:
             return ''
     
+    def preprocess_response(self, message_text):
+        """Hook to potentially send a canned response. 
+        
+        Returns:
+            None: Forward message to model as normal
+            str: Send this as canned response (include_in_context=True)
+            tuple: (response_text, include_in_context) for more control
+        """
+        return None
+    
     def sysprompt_vec(self, argv):
         sysp = self.sysprompt_clean
         for k, v in zip(self.fields, argv):
@@ -58,7 +68,7 @@ class Bot(object):
     
     def __init__(self, client=None, async_mode=False):
         for f, v in [('model', MODELS.CLAUDE_4.SONNET), ('temperature', 1), ('fields', []), 
-                    ('max_tokens', 20000), ('oneshot', False), ('welcome_message', None),
+                    ('max_tokens', 8192), ('oneshot', False), ('welcome_message', None),
                     ('soft_start', False)]:
             if not hasattr(self, f):
                 setattr(self, f, v)
@@ -128,6 +138,15 @@ class AsyncStreamWrapper:
             yield text
 
 
+class CannedResponse:
+    """Wrapper for canned responses to distinguish them from API responses"""
+    def __init__(self, text, include_in_context=True):
+        self.text = text
+        self.include_in_context = include_in_context
+        # Mock the structure of an API response
+        self.content = [type('Content', (), {'text': text})()]
+
+
 class Conversation(object):
     __slots__ = ['messages', 'bot', 'sysprompt', 'argv', 'max_tokens', 'message_objects', 
                 'is_streaming', 'started', 'is_async', 'oneshot']
@@ -193,10 +212,34 @@ class Conversation(object):
         return await self.aresume(message)
 
     async def aresume(self, message):
+        # Check for canned response first
+        canned_response = self.bot.preprocess_response(message)
+        if canned_response is not None:
+            return self._handle_canned_response(message, canned_response)
+        
         if self.is_streaming:
             return await self._aresume_stream(message)
         else:
             return await self._aresume_flat(message)
+
+    def _handle_canned_response(self, original_message, canned_response):
+        """Handle canned responses (works for both sync and async)"""
+        self.messages.append(self._make_text_message('user', original_message))
+        
+        # The Bot.preprocess_response method should return a tuple (response, include_in_context)
+        # or just a string (defaulting to include_in_context=True)
+        if isinstance(canned_response, tuple):
+            response_text, include_in_context = canned_response
+        else:
+            response_text, include_in_context = canned_response, True
+        
+        response_obj = CannedResponse(response_text, include_in_context)
+        self.message_objects.append(response_obj)
+        
+        if include_in_context:
+            self.messages.append(self._make_text_message('assistant', response_text))
+        
+        return response_obj
 
     async def _aresume_stream(self, message):
         self.messages.append(self._make_text_message('user', message))
@@ -220,10 +263,17 @@ class Conversation(object):
         return message_out
 
     def resume(self, message):
+        # Check for canned response first
+        canned_response = self.bot.preprocess_response(message)
+        if canned_response is not None:
+            return self._handle_canned_response(message, canned_response)
+        
         if self.is_streaming:
             return self._resume_stream(message)
         else:
             return self._resume_flat(message)
+
+
     
     def _resume_stream(self, message):
         self.messages.append(self._make_text_message('user', message))
@@ -365,8 +415,12 @@ class ConversationWithFiles(Conversation):
         return message_out
 
 
-def streamer(bot, args=[]):
-    convo = Conversation(bot, stream=True)
+def streamer(bot_or_conversation, args=[]):
+    """If you're passing in a conversation, make sure it's got stream=True!"""
+    if type(bot_or_conversation) is Conversation:
+        convo = bot_or_conversation
+    else: ## in which case it should be either a bot instance or Bot class
+        convo = Conversation(bot_or_conversation, stream=True)
     def streamit(message):
         if not convo.started:
             convo.prestart(args)
