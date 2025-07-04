@@ -28,7 +28,11 @@ def _get_client_class(async_mode=False):
 
 class Bot(object):
     __slots__ = ['fields', 'sysprompt_path', 'sysprompt_text', 'client', 'model', 
-            'temperature', 'max_tokens', 'oneshot', 'welcome_message']
+            'temperature', 'max_tokens', 'oneshot', 'welcome_message', 'soft_start']
+    """soft_start will inject the welcome_message into the conversation context as though 
+                the agent had said it, making it think that the conversation has already
+                begun. Beware of causing confusion by soft-starting with something the model 
+                wouldn't say."""
     
     def sysprompt_generate(self):
         raise NotImplementedError("This method is not implemented")
@@ -54,7 +58,8 @@ class Bot(object):
     
     def __init__(self, client=None, async_mode=False):
         for f, v in [('model', MODELS.CLAUDE_4.SONNET), ('temperature', 1), ('fields', []), 
-                    ('max_tokens', 20000), ('oneshot', False), ('welcome_message', None)]:
+                    ('max_tokens', 20000), ('oneshot', False), ('welcome_message', None),
+                    ('soft_start', False)]:
             if not hasattr(self, f):
                 setattr(self, f, v)
         if not client:
@@ -126,7 +131,7 @@ class AsyncStreamWrapper:
 class Conversation(object):
     __slots__ = ['messages', 'bot', 'sysprompt', 'argv', 'max_tokens', 'message_objects', 
                 'is_streaming', 'started', 'is_async', 'oneshot']
-    def __init__(self, bot, argv=None, stream=False, async_mode=False):
+    def __init__(self, bot, argv=None, stream=False, async_mode=False, soft_start=None):
         self.is_async = async_mode
         if type(bot) is type:
             self.bot = bot(async_mode=async_mode)
@@ -136,6 +141,9 @@ class Conversation(object):
         self.oneshot = self.bot.oneshot
         self.messages = []
         self.message_objects = []
+        if soft_start or (self.bot.soft_start and not soft_start is False):
+            self.messages.append(self._make_text_message('assistant', self.bot.welcome_message))
+            self.message_objects.append(None)
         self.is_streaming = stream
         self.started = False
         if argv is not None:
