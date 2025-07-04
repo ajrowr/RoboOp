@@ -159,8 +159,8 @@ class CannedResponse:
 
 class Conversation(object):
     __slots__ = ['messages', 'bot', 'sysprompt', 'argv', 'max_tokens', 'message_objects', 
-                'is_streaming', 'started', 'is_async', 'oneshot']
-    def __init__(self, bot, argv=None, stream=False, async_mode=False, soft_start=None):
+                'is_streaming', 'started', 'is_async', 'oneshot', 'cache_user_prompt']
+    def __init__(self, bot, argv=None, stream=False, async_mode=False, soft_start=None, cache_user_prompt=False):
         self.is_async = async_mode
         if type(bot) is type:
             self.bot = bot(async_mode=async_mode)
@@ -170,6 +170,7 @@ class Conversation(object):
         self.oneshot = self.bot.oneshot
         self.messages = []
         self.message_objects = []
+        self.cache_user_prompt = cache_user_prompt
         if soft_start or (self.bot.soft_start and not soft_start is False):
             self.messages.append(self._make_text_message('assistant', self.bot.welcome_message))
             self.message_objects.append(None)
@@ -192,7 +193,14 @@ class Conversation(object):
     
     def _get_conversation_context(self):
         """Oneshot is for bots that don't need conversational context"""
-        return [self.messages[-1]] if self.oneshot else self.messages
+        if self.oneshot:
+            return [self.messages[-1]]
+        elif self.cache_user_prompt:
+            from copy import deepcopy
+            mymessages = deepcopy(self.messages)
+            mymessages[-1]['content'][-1]['cache_control'] = {'type': 'ephemeral'}
+            return mymessages
+        return self.messages
     
     def prestart(self, argv):
         self.argv = argv
