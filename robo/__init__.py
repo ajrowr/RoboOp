@@ -35,6 +35,9 @@ class Bot(object):
                 wouldn't say."""
     
     def sysprompt_generate(self):
+        """Allow for generation of sysprompt via a function as an alternative to text. Ideal
+        if you want a structured sysprompt instead of plain text, which is especially useful
+        when you want to use special features such as prompt caching."""
         raise NotImplementedError("This method is not implemented")
     
     @property
@@ -62,9 +65,16 @@ class Bot(object):
     
     def sysprompt_vec(self, argv):
         sysp = self.sysprompt_clean
+        if not argv:
+            return sysp
+        remap = False if type(sysp) is str else True
+        if remap:
+            sysp = json.dumps(sysp)
+            
         for k, v in zip(self.fields, argv):
             sysp = sysp.replace(f'{{{{{k}}}}}', v)
-        return sysp
+        
+        return json.loads(sysp) if remap else sysp
     
     def __init__(self, client=None, async_mode=False):
         for f, v in [('model', MODELS.CLAUDE_4.SONNET), ('temperature', 1), ('fields', []), 
@@ -273,8 +283,6 @@ class Conversation(object):
         else:
             return self._resume_flat(message)
 
-
-    
     def _resume_stream(self, message):
         self.messages.append(self._make_text_message('user', message))
         stream = self.bot.client.messages.stream(
