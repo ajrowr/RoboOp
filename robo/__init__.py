@@ -155,6 +155,25 @@ class CannedResponse:
         self.include_in_context = include_in_context
         # Mock the structure of an API response
         self.content = [type('Content', (), {'text': text})()]
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return False
+    
+    async def __aenter__(self):
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        return False
+    
+    @property
+    def text_stream(self):
+        """Yield the entire text as a single chunk for streaming compatibility"""
+        yield self.text
+    
+## NB: no async version yet and this text_stream probably won't work properly in async contexts
 
 
 class Conversation(object):
