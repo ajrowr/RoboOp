@@ -66,19 +66,19 @@ def main():
     botA, botB, botC = bots
     
     text_of = lambda msg: msg.content[0].text
-    
     get_test_argv = lambda bot: getattr(bot, 'test_argv', [])
+    getmessage = lambda o: o if type(o).__name__.startswith('CannedResponse') else o.stream_context.get_final_message()
+    
     cAssistant = Conversation(botA, get_test_argv(botA), cache_user_prompt=True, stream=True)
     cUser = Conversation(botB, get_test_argv(botB), cache_user_prompt=True, stream=True)
     
     ## it's A that's under test, so start by feeding A's welcome message into B
     messages = []
-    messages.append(cUser.resume(botA.welcome_message))
     with cUser.resume(botA.welcome_message) as streamingmessage:
         print(Style.fg.green + Style.bold + botB.__name__ + ': ' + Style.reset, end='', flush=True)
         for chunk in streamingmessage.text_stream:
             print(chunk, end="", flush=True)
-        messages.append(streamingmessage.stream_context.get_final_message())
+        messages.append(getmessage(streamingmessage))
         print()
             
     maxturns = int(args.turns) if args.turns else 7
@@ -89,7 +89,7 @@ def main():
             break
         current_conv = cAssistant if is_assistant_turn else cUser
         style = lambda t: (Style.fg.blue if i % 2 == 0 else Style.fg.green) + Style.bold + t + Style.reset
-        getmessage = lambda o: o if type(o).__name__.startswith('CannedResponse') else o.stream_context.get_final_message()
+        
         while True:
             try:
                 print('\n' + style(type(current_conv.bot).__name__) + ': ', end='', flush=True)
@@ -110,6 +110,18 @@ def main():
         is_assistant_turn = not is_assistant_turn
     
     print()
+    if botC:
+        import json
+        def message_extract(msgobj):
+            # print(msgobj)
+            if type(msgobj).__name__.startswith('CannedResponse'):
+                return {'type': 'text', 'text': msgobj.text}
+            return msgobj.model_dump()
+        
+        assessment = Conversation(botC, get_test_argv(botC))
+        conversation_dat = [message_extract(message) for message in messages]
+        msg = assessment.resume(json.dumps(conversation_dat))
+        print(f"{Style.bold}ASSESSMENT:{Style.reset}\n{text_of(msg)}")
 
 
 if __name__ == "__main__":
