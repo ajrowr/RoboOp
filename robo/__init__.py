@@ -172,13 +172,20 @@ class CannedResponse:
     def text_stream(self):
         """Yield the entire text as a single chunk for streaming compatibility"""
         yield self.text
-    
-## NB: no async version yet and this text_stream probably won't work properly in async contexts
+
+
+class CannedResponseAsync(CannedResponse):
+    @property
+    async def text_stream(self):
+        """Yield the entire text as a single chunk for streaming compatibility"""
+        """Claude tells me I'm violating the Liskov Substitution Principle or something but IDC TBH"""
+        """Haven't tested yet..."""
+        yield self.text
 
 
 class Conversation(object):
     __slots__ = ['messages', 'bot', 'sysprompt', 'argv', 'max_tokens', 'message_objects', 
-                'is_streaming', 'started', 'is_async', 'oneshot', 'cache_user_prompt']
+                'is_streaming', 'started', 'is_async', 'oneshot', 'cache_user_prompt', 'soft_started']
     def __init__(self, bot, argv=None, stream=False, async_mode=False, soft_start=None, cache_user_prompt=False):
         self.is_async = async_mode
         if type(bot) is type:
@@ -193,6 +200,7 @@ class Conversation(object):
         if soft_start or (self.bot.soft_start and not soft_start is False):
             self.messages.append(self._make_text_message('assistant', self.bot.welcome_message))
             self.message_objects.append(None)
+            self.soft_started = True
         self.is_streaming = stream
         self.started = False
         if argv is not None:
@@ -435,6 +443,11 @@ class ConversationWithFiles(Conversation):
         
     def _resume_flat(self, message, filespecs=[]):
         """filespecs are (content_type, filepath)"""
+        # Check for canned response first
+        canned_response = self.bot.preprocess_response(message) if message else None
+        if canned_response is not None:
+            return self._handle_canned_response(message, canned_response)
+        
         if filespecs:
             self.messages.append(self._make_message_with_images('user', message, filespecs))
         else:
