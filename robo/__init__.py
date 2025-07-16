@@ -30,15 +30,28 @@ class Bot(object):
     __slots__ = ['fields', 'sysprompt_path', 'sysprompt_text', 'client', 'model', 
             'temperature', 'max_tokens', 'oneshot', 'welcome_message', 'soft_start']
     """soft_start will inject the welcome_message into the conversation context as though 
-                the agent had said it, making it think that the conversation has already
-                begun. Beware of causing confusion by soft-starting with something the model 
-                wouldn't say."""
+            the agent had said it, making it think that the conversation has already
+            begun. Beware of causing confusion by soft-starting with something the model 
+            wouldn't say.
+        oneshot is for bots that don't need to maintain conversation context to do their job.
+            Is NOT compatible with tool use!"""
     
     def sysprompt_generate(self):
         """Allow for generation of sysprompt via a function as an alternative to text. Ideal
         if you want a structured sysprompt instead of plain text, which is especially useful
         when you want to use special features such as prompt caching."""
         raise NotImplementedError("This method is not implemented")
+    
+    def get_tool_schema(self):
+        """Tha actual tool call functions should be implemented as methods called tool_<toolname>"""
+        raise NotImplementedError("This method is not implemented")
+    
+    def handle_tool_call(self, tooluseblock):
+        toolfnname = f'tools_{tooluseblock.name}'
+        tool = getattr(self, toolfnname, None)
+        if tool is None:
+            raise Exception(f'Tool function not found: {toolfnname}')
+        return tool(**tooluseblock.input)
     
     @property
     def sysprompt_clean(self):
@@ -218,6 +231,27 @@ class Conversation(object):
             }]
         }
     
+    def _make_tool_message(self, toolblock, toolresult):
+        return {
+            'role': 'user',
+            'content': [{
+                'type': 'tool_result',
+                'tool_use_id': toolblock.id,
+                'content': toolresult,
+            }]
+        }
+    
+    def _make_tool_request_message(self, toolblock):
+        return {
+            'role': 'assistant',
+            'content': [{
+                'type': 'tool_use',
+                'id': toolblock.id,
+                'name': toolblock.name,
+                'input': toolblock.input,
+            }]
+        }
+    
     def _get_conversation_context(self):
         """Oneshot is for bots that don't need conversational context"""
         if self.oneshot:
@@ -327,15 +361,28 @@ class Conversation(object):
         )
         return StreamWrapper(stream, self)
     
-    def _resume_flat(self, message):
-        self.messages.append(self._make_text_message('user', message))
+    def _resume_flat(self, message, is_tool_message=False):
+        if is_tool_message:
+            self.messages.append(message)
+        else:
+            self.messages.append(self._make_text_message('user', message))
         message_out = self.bot.client.messages.create(
             model=self.bot.model, max_tokens=self.max_tokens,
             temperature=self.bot.temperature, system=self.sysprompt,
-            messages=self._get_conversation_context()
+            messages=self._get_conversation_context(),
+            tools=self.bot.get_tool_schema(),
         )
         self.message_objects.append(message_out)
-        self.messages.append(self._make_text_message('assistant', message_out.content[0].text))
+        for contentblock in message_out.content:
+            blocktype = type(contentblock).__name__
+            if blocktype == 'ToolUseBlock':
+                self.messages.append(self._make_tool_request_message(contentblock))
+                tooldat = self.bot.handle_tool_call(contentblock)
+                return self._resume_flat(self._make_tool_message(contentblock, tooldat), is_tool_message=True)
+            elif hasattr(contentblock, 'text'):
+                self.messages.append(self._make_text_message('assistant', contentblock.text))
+            else:
+                raise Exception(f"Don't know what to do with blocktype: {blocktype}")
         return message_out
     
     def _post_stream_hook(self):
