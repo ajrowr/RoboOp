@@ -8,6 +8,7 @@ import os
 import json
 import datetime
 import time
+from types import SimpleNamespace
 
 
 API_KEY_FILE = None ## If you want to load it from a file 
@@ -66,13 +67,20 @@ class Bot(object):
         else:
             return ''
     
-    def preprocess_response(self, message_text):
-        """Hook to potentially send a canned response. 
+    def preprocess_response(self, message_text, conversation):
+        """Hook to potentially send a canned response or manipulate the message that will
+        be sent to the model.
         
         Returns:
+            -- these ones engage the model --
             None: Forward message to model as normal
-            str: Send this as canned response (include_in_context=True)
-            tuple: (response_text, include_in_context) for more control
+            dict: Append the dict to the conversation messages and then invoke 
+                  the model (ie. add a custom message to the stack rather than 
+                  using the provided message text as basis for one - useful for 
+                  some types of tool calls, particularly those where the client has to do something)
+            -- these ones bypass the model --
+            str: Send this to the client as canned response (include_in_context=True)
+            tuple: (response_text, include_in_context) as above but with more control
         """
         return None
     
@@ -169,6 +177,9 @@ class CannedResponse:
         # Mock the structure of an API response
         self.content = [type('Content', (), {'text': text})()]
     
+    def __repr__(self):
+        return f'<{type(self).__name__}: "{self.text}">'
+    
     def __enter__(self):
         return self
     
@@ -222,7 +233,8 @@ class Conversation(object):
         else:
             self.argv = []
     
-    def _make_text_message(self, role, content):
+    @staticmethod
+    def _make_text_message(role, content):
         return {
             'role': role,
             'content': [{
@@ -231,7 +243,10 @@ class Conversation(object):
             }]
         }
     
-    def _make_tool_message(self, toolblock, toolresult):
+    @staticmethod
+    def _make_tool_result_message(toolblock, toolresult):
+        if type(toolblock) is dict:
+            toolblock = SimpleNamespace(**toolblock)
         return {
             'role': 'user',
             'content': [{
@@ -241,7 +256,10 @@ class Conversation(object):
             }]
         }
     
-    def _make_tool_request_message(self, toolblock):
+    @staticmethod
+    def _make_tool_request_message(toolblock):
+        if type(toolblock) is dict:
+            toolblock = SimpleNamespace(**toolblock)
         return {
             'role': 'assistant',
             'content': [{
@@ -251,6 +269,16 @@ class Conversation(object):
                 'input': toolblock.input,
             }]
         }
+    
+    def _get_last_tool_use_id(self):
+        tu_id = None
+        for m in reversed(self.messages):
+            if m['role'] == 'assistant':
+                for cblock in m['content']:
+                    if cblock['type'] == 'tool_use':
+                        tu_id = cblock['id']
+                        break
+        return tu_id
     
     def _get_conversation_context(self):
         """Oneshot is for bots that don't need conversational context"""
@@ -292,7 +320,7 @@ class Conversation(object):
 
     async def aresume(self, message):
         # Check for canned response first
-        canned_response = self.bot.preprocess_response(message)
+        canned_response = self.bot.preprocess_response(message, self)
         if canned_response is not None:
             return self._handle_canned_response(message, canned_response)
         
@@ -302,8 +330,12 @@ class Conversation(object):
             return await self._aresume_flat(message)
 
     def _handle_canned_response(self, original_message, canned_response):
-        """Handle canned responses (works for both sync and async)"""
-        self.messages.append(self._make_text_message('user', original_message))
+        """Handle canned responses (works for both sync and async). If original_message
+        is None, it isn't added to the conversation history (which is useful for
+        certain types of tool calls, eg. ones where you need to send a system message 
+        to the client that might confuse the model if it became part of the chat log)."""
+        if original_message is not None:
+            self.messages.append(self._make_text_message('user', original_message))
         
         # The Bot.preprocess_response method should return a tuple (response, include_in_context)
         # or just a string (defaulting to include_in_context=True)
@@ -343,14 +375,20 @@ class Conversation(object):
 
     def resume(self, message):
         # Check for canned response first
-        canned_response = self.bot.preprocess_response(message)
-        if canned_response is not None:
+        canned_response = self.bot.preprocess_response(message, self)
+        is_tool_message = False
+        if type(canned_response) is dict:
+            message = canned_response
+            is_tool_message = True
+        elif canned_response is not None:
             return self._handle_canned_response(message, canned_response)
         
         if self.is_streaming:
+            if is_tool_message:
+                raise Exception(f"Tool use is not supported in streaming yet")
             return self._resume_stream(message)
         else:
-            return self._resume_flat(message)
+            return self._resume_flat(message, is_tool_message=is_tool_message)
 
     def _resume_stream(self, message):
         self.messages.append(self._make_text_message('user', message))
@@ -378,7 +416,10 @@ class Conversation(object):
             if blocktype == 'ToolUseBlock':
                 self.messages.append(self._make_tool_request_message(contentblock))
                 tooldat = self.bot.handle_tool_call(contentblock)
-                return self._resume_flat(self._make_tool_message(contentblock, tooldat), is_tool_message=True)
+                if tooldat['target'] == 'model':
+                    return self._resume_flat(self._make_tool_result_message(contentblock, tooldat), is_tool_message=True)
+                elif tooldat['target'] == 'client':
+                    return self._handle_canned_response(None, (tooldat['message'], False))
             elif hasattr(contentblock, 'text'):
                 self.messages.append(self._make_text_message('assistant', contentblock.text))
             else:
@@ -490,8 +531,8 @@ class ConversationWithFiles(Conversation):
         
     def _resume_flat(self, message, filespecs=[]):
         """filespecs are (content_type, filepath)"""
-        # Check for canned response first
-        canned_response = self.bot.preprocess_response(message) if message else None
+        # Check if the bot wants to preprocess the response
+        canned_response = self.bot.preprocess_response(message, self) if message else None
         if canned_response is not None:
             return self._handle_canned_response(message, canned_response)
         
