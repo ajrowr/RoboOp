@@ -27,6 +27,10 @@ def _get_client_class(async_mode=False):
         return anthropic.AsyncAnthropic
     return anthropic.Anthropic
 
+def _get_client(async_mode=False):
+    return _get_client_class()(api_key=_get_api_key())
+
+
 class Bot(object):
     __slots__ = ['fields', 'sysprompt_path', 'sysprompt_text', 'client', 'model', 
             'temperature', 'max_tokens', 'oneshot', 'welcome_message', 'soft_start']
@@ -77,9 +81,10 @@ class Bot(object):
             dict: Append the dict to the conversation messages and then invoke 
                   the model (ie. add a custom message to the stack rather than 
                   using the provided message text as basis for one - useful for 
-                  some types of tool calls, particularly those where the client has to do something)
+                  some types of tool calls, particularly those where the model has to 
+                  wait for the client to do something before proceeding)
             -- these ones bypass the model --
-            str: Send this to the client as canned response (include_in_context=True)
+            str: Send this to the client as a CannedResponse (include_in_context=True)
             tuple: (response_text, include_in_context) as above but with more control
         """
         return None
@@ -119,6 +124,7 @@ class StreamWrapper:
         self.conversation_obj = conversation_obj
         self.accumulated_text = ""
         self.chunks = []
+        self.events = []
     
     def __enter__(self):
         self.stream_context = self.stream.__enter__()
@@ -139,6 +145,12 @@ class StreamWrapper:
             self.chunks.append(text)
             self.accumulated_text += text
             yield text
+    
+    @property
+    def event_stream(self):
+        for event in self.stream_context:
+            self.events.append(event)
+            yield event
 
 
 class AsyncStreamWrapper:
@@ -395,7 +407,8 @@ class Conversation(object):
         stream = self.bot.client.messages.stream(
             model=self.bot.model, max_tokens=self.max_tokens,
             temperature=self.bot.temperature, system=self.sysprompt,
-            messages=self._get_conversation_context()
+            messages=self._get_conversation_context(),
+            tools=self.bot.get_tool_schema(),
         )
         return StreamWrapper(stream, self)
     
