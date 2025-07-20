@@ -16,7 +16,7 @@ API_KEY_FILE = None ## If you want to load it from a file
 API_KEY_ENV_VAR = None ## If you want to use a different env var instead of ANTHROPIC_API_KEY
 
 STREAM_WRAPPER_CLASS_SYNC = StreamWrapperWithToolUse
-STREAM_WRAPPER_CLASS_ASYNC = AsyncStreamWrapper
+STREAM_WRAPPER_CLASS_ASYNC = AsyncStreamWrapperWithToolUse
 
 def _get_api_key():
     if API_KEY_FILE:
@@ -362,13 +362,16 @@ class Conversation(object):
         
         return response_obj
 
-    async def _aresume_stream(self, message):
-        self.messages.append(self._make_text_message('user', message))
-        # Remove 'await' here - stream() returns AsyncMessageStreamManager directly
+    async def _aresume_stream(self, message, is_tool_message=False):
+        if is_tool_message:
+            self.messages.append(message)
+        else:
+            self.messages.append(self._make_text_message('user', message))
         stream = self.bot.client.messages.stream(
             model=self.bot.model, max_tokens=self.max_tokens,
             temperature=self.bot.temperature, system=self.sysprompt,
-            messages=self._get_conversation_context()
+            messages=self._get_conversation_context(),
+            tools=self.bot.get_tools_schema(),
         )
         return STREAM_WRAPPER_CLASS_ASYNC(stream, self)
 
@@ -394,8 +397,6 @@ class Conversation(object):
             return self._handle_canned_response(message, canned_response)
         
         if self.is_streaming:
-            # if is_tool_message:
-            #     raise Exception(f"Tool use is not supported in streaming yet")
             return self._resume_stream(message, is_tool_message=is_tool_message)
         else:
             return self._resume_flat(message, is_tool_message=is_tool_message)
@@ -595,7 +596,7 @@ To use streamer_async :
 >>> from robo import *
 >>> say = streamer_async(Bot)
 >>> coro = say('who goes there?')
->>> asyncio.run(coro)    
+>>> asyncio.run(coro)
 """
 
 __all__ = ['Bot', 'Conversation', 'streamer', 'streamer_async', 'MODELS']

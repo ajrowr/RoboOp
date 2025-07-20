@@ -79,6 +79,7 @@ class AsyncStreamWrapper:
         self.conversation_obj = conversation_obj
         self.accumulated_text = ""
         self.chunks = []
+        self.events = []
     
     async def __aenter__(self):
         self.stream_context = await self.stream.__aenter__()
@@ -101,5 +102,57 @@ class AsyncStreamWrapper:
             self.chunks.append(text)
             self.accumulated_text += text
             yield text
+    
+    @property
+    async def event_stream(self):
+        async for event in self.stream_context:
+            self.events.append(event)
+            yield event
 
-__all__ = ['StreamWrapper', 'AsyncStreamWrapper', 'StreamWrapperWithToolUse'] #
+
+class AsyncStreamWrapperWithToolUse(AsyncStreamWrapper):
+    @property
+    async def text_stream(self):
+        
+        async def exhaust_events(conv):
+            current_block_type = None
+            accumulated_text = ''
+            accumulated_context = []
+            ## Stream text responses, capture tool use requests
+            async for event in self.event_stream:
+                if event.type == 'content_block_start':
+                    current_block_type = type(event.content_block).__name__
+                elif event.type == 'text':
+                    yield event.text
+                    accumulated_text += event.text
+                elif event.type == 'content_block_stop' and current_block_type == 'ToolUseBlock':
+                    treq = {
+                        'type': 'tool_use',
+                        'id': event.content_block.id,
+                        'name': event.content_block.name,
+                        'input': event.content_block.input,
+                    }
+                    conv._add_tool_request(treq)
+                    accumulated_context.append(treq)
+                elif event.type == 'content_block_stop' and current_block_type == 'TextBlock':
+                    ttxt = {
+                        'type': 'text',
+                        'text': event.content_block.text,
+                    }
+                    accumulated_context.append(ttxt)
+            conv.messages.append({'role': 'assistant', 'content': accumulated_context})
+    
+            if not conv._is_exhausted():
+                conv._handle_pending_tool_requests()
+                resps = conv._compile_tool_responses()
+                async with await conv._aresume_stream(resps, is_tool_message=True) as substream:
+                    async for chunk in substream.text_stream:
+                        yield chunk
+                
+        async for chunk in exhaust_events(self.conversation_obj):
+            yield chunk
+
+
+
+__all__ = ['StreamWrapper', 'AsyncStreamWrapper', 'StreamWrapperWithToolUse', \
+         'AsyncStreamWrapperWithToolUse']
