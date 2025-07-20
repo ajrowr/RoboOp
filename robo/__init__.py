@@ -2,6 +2,7 @@ import anthropic
 
 from .models import MODELS
 from .exceptions import *
+from .streamwrappers import *
 
 from pathlib import Path
 import os
@@ -14,6 +15,8 @@ from types import SimpleNamespace
 API_KEY_FILE = None ## If you want to load it from a file 
 API_KEY_ENV_VAR = None ## If you want to use a different env var instead of ANTHROPIC_API_KEY
 
+STREAM_WRAPPER_CLASS_SYNC = StreamWrapperWithToolUse
+STREAM_WRAPPER_CLASS_ASYNC = AsyncStreamWrapper
 
 def _get_api_key():
     if API_KEY_FILE:
@@ -47,11 +50,18 @@ class Bot(object):
         when you want to use special features such as prompt caching."""
         raise NotImplementedError("This method is not implemented")
     
-    def get_tool_schema(self):
-        """Tha actual tool call functions should be implemented as methods called tool_<toolname>"""
-        raise NotImplementedError("This method is not implemented")
+    def get_tools_schema(self):
+        """Return a schema describing the tools available to this bot. See
+        https://docs.anthropic.com/en/api/messages#body-tools for more info on the structure
+        of the return value.
+        The actual tool call functions should be implemented in a subclass as methods such as
+             def tool_<toolname>(self, paramname1=None, paramname2=None, ...)
+        """
+        return None
     
     def handle_tool_call(self, tooluseblock):
+        if type(tooluseblock) is dict:
+            tooluseblock = SimpleNamespace(**tooluseblock)
         toolfnname = f'tools_{tooluseblock.name}'
         tool = getattr(self, toolfnname, None)
         if tool is None:
@@ -118,67 +128,6 @@ class Bot(object):
         return klass(client)
 
 
-class StreamWrapper:
-    def __init__(self, stream, conversation_obj):
-        self.stream = stream
-        self.conversation_obj = conversation_obj
-        self.accumulated_text = ""
-        self.chunks = []
-        self.events = []
-    
-    def __enter__(self):
-        self.stream_context = self.stream.__enter__()
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        result = self.stream.__exit__(exc_type, exc_val, exc_tb)
-        if exc_type is None and self.accumulated_text:
-            asst_message = self.conversation_obj._make_text_message('assistant', self.accumulated_text)
-            self.conversation_obj.messages.append(asst_message)
-            self.conversation_obj._post_stream_hook()
-        
-        return result
-    
-    @property
-    def text_stream(self):
-        for text in self.stream_context.text_stream:
-            self.chunks.append(text)
-            self.accumulated_text += text
-            yield text
-    
-    @property
-    def event_stream(self):
-        for event in self.stream_context:
-            self.events.append(event)
-            yield event
-
-
-class AsyncStreamWrapper:
-    def __init__(self, stream, conversation_obj):
-        self.stream = stream
-        self.conversation_obj = conversation_obj
-        self.accumulated_text = ""
-        self.chunks = []
-    
-    async def __aenter__(self):
-        self.stream_context = await self.stream.__aenter__()
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        result = await self.stream.__aexit__(exc_type, exc_val, exc_tb)
-        if exc_type is None and self.accumulated_text:
-            asst_message = self.conversation_obj._make_text_message('assistant', self.accumulated_text)
-            self.conversation_obj.messages.append(asst_message)
-            await self.conversation_obj._post_stream_hook_async()
-        
-        return result
-    
-    @property
-    async def text_stream(self):
-        async for text in self.stream_context.text_stream:
-            self.chunks.append(text)
-            self.accumulated_text += text
-            yield text
 
 
 class CannedResponse:
@@ -221,7 +170,8 @@ class CannedResponseAsync(CannedResponse):
 
 class Conversation(object):
     __slots__ = ['messages', 'bot', 'sysprompt', 'argv', 'max_tokens', 'message_objects', 
-                'is_streaming', 'started', 'is_async', 'oneshot', 'cache_user_prompt', 'soft_started']
+                'is_streaming', 'started', 'is_async', 'oneshot', 'cache_user_prompt', 
+                'soft_started', 'tool_use_blocks']
     def __init__(self, bot, argv=None, stream=False, async_mode=False, soft_start=None, cache_user_prompt=False):
         self.is_async = async_mode
         if type(bot) is type:
@@ -233,6 +183,7 @@ class Conversation(object):
         self.messages = []
         self.message_objects = []
         self.cache_user_prompt = cache_user_prompt
+        self.tool_use_blocks = SimpleNamespace(pending=[], resolved=[])
         if soft_start or (self.bot.soft_start and not soft_start is False):
             self.messages.append(self._make_text_message('assistant', self.bot.welcome_message))
             self.message_objects.append(None)
@@ -291,6 +242,53 @@ class Conversation(object):
                         tu_id = cblock['id']
                         break
         return tu_id
+    
+    def _add_tool_request(self, request):
+        if type(request) is dict:
+            request = SimpleNamespace(**request)
+        self.tool_use_blocks.pending.append(
+            SimpleNamespace(
+                name = request.name,
+                id = request.id,
+                request = request,
+                response = None,
+                status = 'PENDING',
+            )
+        )
+    
+    def _handle_pending_tool_requests(self):
+        for tub in self.tool_use_blocks.pending:
+            if tub.status == 'PENDING':
+                tub.response = self.bot.handle_tool_call(tub.request)
+                tub.status = 'READY'
+    
+    def _compile_tool_responses(self, mark_resolved=True):
+        """Compile the responses for tubs with status READY into a single block suitable for adding into the message history"""
+        blocks_out = []
+        for tub in self.tool_use_blocks.pending:
+            if tub.status == 'READY':
+                blocks_out.append({
+                    'type': 'tool_result',
+                    'tool_use_id': tub.id,
+                    'content': str(tub.response['message']),
+                })
+                tub.status = 'RESOLVED' if mark_resolved else tub.status
+        if mark_resolved:
+            for tub in list(filter(lambda tub: tub.status == 'RESOLVED', self.tool_use_blocks.pending)):
+                self.tool_use_blocks.resolved.append(tub)
+                self.tool_use_blocks.pending.remove(tub)
+                
+        return {
+            'role': 'user',
+            'content': blocks_out
+        }
+    
+    def _is_exhausted(self):
+        """Return True if the last message is from the assistant and consists only of 
+        text content blocks."""
+        lastmsg = self.messages[-1]
+        return lastmsg['role'] == 'assistant' and \
+            all([block['type'] == 'text' for block in lastmsg['content']])
     
     def _get_conversation_context(self):
         """Oneshot is for bots that don't need conversational context"""
@@ -372,7 +370,7 @@ class Conversation(object):
             temperature=self.bot.temperature, system=self.sysprompt,
             messages=self._get_conversation_context()
         )
-        return AsyncStreamWrapper(stream, self)
+        return STREAM_WRAPPER_CLASS_ASYNC(stream, self)
 
     async def _aresume_flat(self, message):
         self.messages.append(self._make_text_message('user', message))
@@ -396,22 +394,25 @@ class Conversation(object):
             return self._handle_canned_response(message, canned_response)
         
         if self.is_streaming:
-            if is_tool_message:
-                raise Exception(f"Tool use is not supported in streaming yet")
-            return self._resume_stream(message)
+            # if is_tool_message:
+            #     raise Exception(f"Tool use is not supported in streaming yet")
+            return self._resume_stream(message, is_tool_message=is_tool_message)
         else:
             return self._resume_flat(message, is_tool_message=is_tool_message)
 
-    def _resume_stream(self, message):
-        self.messages.append(self._make_text_message('user', message))
+    def _resume_stream(self, message, is_tool_message=False):
+        if is_tool_message:
+            self.messages.append(message)
+        else:
+            self.messages.append(self._make_text_message('user', message))
         stream = self.bot.client.messages.stream(
             model=self.bot.model, max_tokens=self.max_tokens,
             temperature=self.bot.temperature, system=self.sysprompt,
             messages=self._get_conversation_context(),
-            tools=self.bot.get_tool_schema(),
+            tools=self.bot.get_tools_schema(),
         )
-        return StreamWrapper(stream, self)
-    
+        return STREAM_WRAPPER_CLASS_SYNC(stream, self)
+
     def _resume_flat(self, message, is_tool_message=False):
         if is_tool_message:
             self.messages.append(message)
@@ -421,7 +422,7 @@ class Conversation(object):
             model=self.bot.model, max_tokens=self.max_tokens,
             temperature=self.bot.temperature, system=self.sysprompt,
             messages=self._get_conversation_context(),
-            tools=self.bot.get_tool_schema(),
+            tools=self.bot.get_tools_schema(),
         )
         self.message_objects.append(message_out)
         for contentblock in message_out.content:
