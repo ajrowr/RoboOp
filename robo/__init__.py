@@ -398,17 +398,63 @@ class Conversation(object):
         )
         return STREAM_WRAPPER_CLASS_ASYNC(stream, self)
 
-    async def _aresume_flat(self, message):
-        self.messages.append(self._make_text_message('user', message))
+    async def _aresume_flat(self, message, is_tool_message=False):
+        if is_tool_message:
+            self.messages.append(message)
+        else:
+            self.messages.append(self._make_text_message('user', message))
+    
         message_out = await self.bot.client.messages.create(
             model=self.bot.model, max_tokens=self.max_tokens,
             temperature=self.bot.temperature, system=self.sysprompt,
-            messages=self._get_conversation_context()
+            messages=self._get_conversation_context(),
+            tools=self.bot.get_tools_schema(),
         )
         self.message_objects.append(message_out)
-        self.messages.append(self._make_text_message('assistant', message_out.content[0].text))
+    
+        # Process all content blocks in the response
+        accumulated_context = []
+        response_text = ""
+    
+        for contentblock in message_out.content:
+            blocktype = type(contentblock).__name__
+            if blocktype == 'ToolUseBlock':
+                treq = {
+                    'type': 'tool_use',
+                    'id': contentblock.id,
+                    'name': contentblock.name,
+                    'input': contentblock.input,
+                }
+                self._add_tool_request(treq)
+                accumulated_context.append(treq)
+            elif hasattr(contentblock, 'text'):
+                ttxt = {
+                    'type': 'text',
+                    'text': contentblock.text,
+                }
+                accumulated_context.append(ttxt)
+                response_text += contentblock.text
+            else:
+                raise Exception(f"Don't know what to do with blocktype: {blocktype}")
+    
+        # Add the assistant's response to messages
+        self.messages.append({'role': 'assistant', 'content': accumulated_context})
+    
+        # Handle tool calls if conversation is not exhausted (i.e., if there are pending tool calls)
+        if not self._is_exhausted():
+            self._handle_pending_tool_requests()
+        
+            # Check for client-targeted responses first
+            msg_out = self._handle_waiting_tool_requests()
+            if msg_out is not None:
+                return self._handle_canned_response(None, (msg_out, False))
+            else:
+                # Handle model-targeted tool responses
+                resps = self._compile_tool_responses()
+                return await self._aresume_flat(resps, is_tool_message=True)
+    
         return message_out
-
+    
     def resume(self, message):
         # Check for canned response first
         canned_response = self.bot.preprocess_response(message, self)
@@ -442,6 +488,7 @@ class Conversation(object):
             self.messages.append(message)
         else:
             self.messages.append(self._make_text_message('user', message))
+    
         message_out = self.bot.client.messages.create(
             model=self.bot.model, max_tokens=self.max_tokens,
             temperature=self.bot.temperature, system=self.sysprompt,
@@ -449,19 +496,48 @@ class Conversation(object):
             tools=self.bot.get_tools_schema(),
         )
         self.message_objects.append(message_out)
+    
+        # Process all content blocks in the response
+        accumulated_context = []
+        response_text = ""
+    
         for contentblock in message_out.content:
             blocktype = type(contentblock).__name__
             if blocktype == 'ToolUseBlock':
-                self.messages.append(self._make_tool_request_message(contentblock))
-                tooldat = self.bot.handle_tool_call(contentblock)
-                if tooldat['target'] == 'model':
-                    return self._resume_flat(self._make_tool_result_message(contentblock, tooldat), is_tool_message=True)
-                elif tooldat['target'] == 'client':
-                    return self._handle_canned_response(None, (tooldat['message'], False))
+                treq = {
+                    'type': 'tool_use',
+                    'id': contentblock.id,
+                    'name': contentblock.name,
+                    'input': contentblock.input,
+                }
+                self._add_tool_request(treq)
+                accumulated_context.append(treq)
             elif hasattr(contentblock, 'text'):
-                self.messages.append(self._make_text_message('assistant', contentblock.text))
+                ttxt = {
+                    'type': 'text',
+                    'text': contentblock.text,
+                }
+                accumulated_context.append(ttxt)
+                response_text += contentblock.text
             else:
                 raise Exception(f"Don't know what to do with blocktype: {blocktype}")
+    
+        # Add the assistant's response to messages
+        self.messages.append({'role': 'assistant', 'content': accumulated_context})
+    
+        # Handle tool calls if conversation is not exhausted (i.e., if there are pending tool calls)
+        if not self._is_exhausted():
+            self._handle_pending_tool_requests()
+        
+            # Check for client-targeted responses first
+            msg_out = self._handle_waiting_tool_requests()
+            if msg_out is not None:
+                return self._handle_canned_response(None, (msg_out, False))
+            else:
+                # Handle model-targeted tool responses
+                resps = self._compile_tool_responses()
+                return self._resume_flat(resps, is_tool_message=True)
+    
         return message_out
     
     def _post_stream_hook(self):
