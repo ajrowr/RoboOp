@@ -580,8 +580,11 @@ def streamer(bot_or_conversation, args=[]):
                 print(chunk, end="", flush=True)
     return streamit
 
-def streamer_async(bot, args=[]):
-    convo = Conversation(bot, stream=True, async_mode=True)
+def streamer_async(bot_or_conversation, args=[]):
+    if type(bot_or_conversation) is Conversation:
+        convo = bot_or_conversation
+    else:
+        convo = Conversation(bot_or_conversation, stream=True, async_mode=True)
     async def streamit(message):
         if not convo.started:
             convo.prestart(args)
