@@ -57,7 +57,7 @@ class Bot(object):
         The actual tool call functions should be implemented in a subclass as methods such as
              def tool_<toolname>(self, paramname1=None, paramname2=None, ...)
         """
-        return None
+        return []
     
     def handle_tool_call(self, tooluseblock):
         if type(tooluseblock) is dict:
@@ -260,7 +260,26 @@ class Conversation(object):
         for tub in self.tool_use_blocks.pending:
             if tub.status == 'PENDING':
                 tub.response = self.bot.handle_tool_call(tub.request)
-                tub.status = 'READY'
+                if (target := tub.response['target']) == 'model':
+                    tub.status = 'READY'
+                elif target == 'client':
+                    tub.status = 'WAITING'
+    
+    def _handle_waiting_tool_requests(self):
+        """Handle requests that are in 'WAITING' state, ie. that have target "client" but haven't sent
+        their message yet.
+        WAITING requests are a bit tricky because they kind of work outside the usual flow; for now, 
+        it's probably best to try to avoid mixing them with tool calls that target "model", and aim for
+        only one to be sent at a time.
+        This function concatenates the 'message' keys of anything found to be in WAITING state into a
+        CannedMessage and returns it; if nothing is found, it returns None.
+        NB: if model- and client-targeted tool calls are mixed in parallel, behaviour may be 
+        unpredictable (including double-execution of model-targeted tools). It's recommended that you
+        structure your system prompt and/or tool descriptions accordingly.
+        """
+        waiting_messages = [str(tub.response['message']) for tub in self.tool_use_blocks.pending if tub.status == 'WAITING']
+        if waiting_messages:
+            return '\n'.join(waiting_messages)
     
     def _compile_tool_responses(self, mark_resolved=True):
         """Compile the responses for tubs with status READY into a single block suitable for adding into the message history"""
@@ -331,13 +350,17 @@ class Conversation(object):
     async def aresume(self, message):
         # Check for canned response first
         canned_response = self.bot.preprocess_response(message, self)
-        if canned_response is not None:
+        is_tool_message = False
+        if type(canned_response) is dict:
+            message = canned_response
+            is_tool_message = True
+        elif canned_response is not None:
             return self._handle_canned_response(message, canned_response)
         
         if self.is_streaming:
-            return await self._aresume_stream(message)
+            return await self._aresume_stream(message, is_tool_message=is_tool_message)
         else:
-            return await self._aresume_flat(message)
+            return await self._aresume_flat(message, is_tool_message=is_tool_message)
 
     def _handle_canned_response(self, original_message, canned_response):
         """Handle canned responses (works for both sync and async). If original_message
@@ -503,7 +526,7 @@ class LoggedConversation(Conversation):
         self._write_log()
     
     @classmethod
-    def revive(klass, bot, conversation_id, logs_dir, argv, **kwargs):
+    def revive(klass, bot, conversation_id, logs_dir, argv=[], **kwargs):
         revenant = klass(bot, conversation_id=conversation_id, logs_dir=logs_dir, **kwargs)
         ## Find the chatlog to continue the conversation
         try:
@@ -568,7 +591,7 @@ class ConversationWithFiles(Conversation):
 
 def streamer(bot_or_conversation, args=[]):
     """If you're passing in a conversation, make sure it's got stream=True!"""
-    if type(bot_or_conversation) is Conversation:
+    if issubclass(type(bot_or_conversation), Conversation):
         convo = bot_or_conversation
     else: ## in which case it should be either a bot instance or Bot class
         convo = Conversation(bot_or_conversation, stream=True)
@@ -581,7 +604,7 @@ def streamer(bot_or_conversation, args=[]):
     return streamit
 
 def streamer_async(bot_or_conversation, args=[]):
-    if type(bot_or_conversation) is Conversation:
+    if issubclass(type(bot_or_conversation), Conversation):
         convo = bot_or_conversation
     else:
         convo = Conversation(bot_or_conversation, stream=True, async_mode=True)
