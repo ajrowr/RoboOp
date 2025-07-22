@@ -35,6 +35,12 @@ def _get_client(async_mode=False):
 
 
 class Bot(object):
+    """A bot that can engage in conversations via Claude models.
+    
+    Provides a foundation for creating AI assistants with customizable system prompts,
+    tool capabilities, and conversation handling. Can be subclassed to create specialized
+    bots with specific behaviors and tool integrations.
+    """
     __slots__ = ['fields', 'sysprompt_path', 'sysprompt_text', 'client', 'model', 
             'temperature', 'max_tokens', 'oneshot', 'welcome_message', 'soft_start']
     """soft_start will inject the welcome_message into the conversation context as though 
@@ -45,21 +51,57 @@ class Bot(object):
             Is NOT compatible with tool use!"""
     
     def sysprompt_generate(self):
-        """Allow for generation of sysprompt via a function as an alternative to text. Ideal
-        if you want a structured sysprompt instead of plain text, which is especially useful
-        when you want to use special features such as prompt caching."""
+        """Generate a system prompt dynamically as an alternative to static text.
+        
+        Override this method to create structured system prompts or prompts that
+        change based on runtime conditions. Particularly useful for prompt caching
+        or complex prompt structures.
+        
+        Returns:
+            str or dict: The system prompt content
+            
+        Raises:
+            NotImplementedError: If not overridden in subclass
+        """
         raise NotImplementedError("This method is not implemented")
     
     def get_tools_schema(self):
-        """Return a schema describing the tools available to this bot. See
-        https://docs.anthropic.com/en/api/messages#body-tools for more info on the structure
-        of the return value.
-        The actual tool call functions should be implemented in a subclass as methods such as
+        """Return the schema describing tools available to this bot.
+        
+        Override this method to define tools that the bot can use during conversations.
+        Tool implementations should be provided as methods named 'tools_<toolname>'.
+        
+        Returns:
+            list: Tool schema following Anthropic's API format
+        
+        See https://docs.anthropic.com/en/api/messages#body-tools for more info on the structure
+        of the tool schema.
+        
+        The actual tool call functions are implemented in a subclass as methods such as
              def tool_<toolname>(self, paramname1=None, paramname2=None, ...)
         """
         return []
     
     def handle_tool_call(self, tooluseblock):
+        """Execute a tool call based on the provided tool use block. Looks for a function to
+        handle the block, having the format:
+            def tool_<tooluseblock.name>(self, paramname1=None, paramname2=None, ...)
+        
+        The function returns a dict in the format: 
+            {
+                "target": "<'client' or 'model'>,
+                "message": <message for the client or the model, flexible format>
+            }
+        
+        Args:
+            tooluseblock: Tool use block containing name and input parameters
+            
+        Returns:
+            The result of the tool execution
+            
+        Raises:
+            Exception: If the requested tool function is not found
+        """
         if type(tooluseblock) is dict:
             tooluseblock = SimpleNamespace(**tooluseblock)
         toolfnname = f'tools_{tooluseblock.name}'
@@ -82,24 +124,35 @@ class Bot(object):
             return ''
     
     def preprocess_response(self, message_text, conversation):
-        """Hook to potentially send a canned response or manipulate the message that will
-        be sent to the model.
+        """Hook to intercept and potentially modify messages before sending to the model.
         
+        Override this method to implement custom message handling, canned responses,
+        or message preprocessing logic.
+        
+        Args:
+            message_text (str): The incoming message text
+            conversation (Conversation): The conversation context
+            
         Returns:
-            -- these ones engage the model --
             None: Forward message to model as normal
-            dict: Append the dict to the conversation messages and then invoke 
-                  the model (ie. add a custom message to the stack rather than 
-                  using the provided message text as basis for one - useful for 
-                  some types of tool calls, particularly those where the model has to 
-                  wait for the client to do something before proceeding)
-            -- these ones bypass the model --
-            str: Send this to the client as a CannedResponse (include_in_context=True)
-            tuple: (response_text, include_in_context) as above but with more control
+            dict: Custom message to append and send to model
+            str: Send as canned response (using default include_in_context=True)
+            tuple: (response_text, include_in_context) for more control
         """
         return None
     
     def sysprompt_vec(self, argv):
+        """Generate a system prompt with template variable substitution.
+        
+        Replaces template variables in the format {{field}} with values from argv
+        based on the bot's fields configuration.
+        
+        Args:
+            argv (list): Values to substitute into template variables
+            
+        Returns:
+            str or dict: The system prompt with substituted values
+        """
         sysp = self.sysprompt_clean
         if not argv:
             return sysp
@@ -129,7 +182,11 @@ class Bot(object):
 
 
 class CannedResponse:
-    """Wrapper for canned responses to distinguish them from API responses"""
+    """Wrapper for pre-defined responses that bypass the AI model.
+    
+    Used to return static responses while maintaining compatibility with
+    the conversation flow and streaming interfaces.
+    """
     def __init__(self, text, include_in_context=True):
         self.text = text
         self.include_in_context = include_in_context
@@ -158,6 +215,12 @@ class CannedResponse:
 
 
 class Conversation(object):
+    """Manages a conversation session between a user and a bot.
+    
+    Handles message history, tool use coordination, streaming responses,
+    and conversation state management. Supports both synchronous and
+    asynchronous operation modes.
+    """
     __slots__ = ['messages', 'bot', 'sysprompt', 'argv', 'max_tokens', 'message_objects', 
                 'is_streaming', 'started', 'is_async', 'oneshot', 'cache_user_prompt', 
                 'soft_started', 'tool_use_blocks']
@@ -312,11 +375,32 @@ class Conversation(object):
         return self.messages
     
     def prestart(self, argv):
+        """Initialize the conversation with template arguments.
+        
+        Sets up the system prompt by substituting template variables
+        and marks the conversation as started.
+        
+        Args:
+            argv (list): Arguments for system prompt template substitution
+        """
         self.argv = argv
         self.sysprompt = self.bot.sysprompt_vec(argv)
         self.started = True
     
     def start(self, *args):
+        """Start a new conversation with an initial message.
+        
+        Args:
+            *args: Either (argv, message) or just (message)
+                argv (list): Template arguments for system prompt
+                message (str): The initial user message
+                
+        Returns:
+            The bot's response to the initial message
+            
+        Raises:
+            Exception: If conversation has already started
+        """
         if type(args[0]) is list:
             argv, message = args
         else:
@@ -328,6 +412,19 @@ class Conversation(object):
         return self.resume(message)
 
     async def astart(self, *args):
+        """Start a new conversation asynchronously with an initial message.
+        
+        Args:
+            *args: Either (argv, message) or just (message)
+                argv (list): Template arguments for system prompt  
+                message (str): The initial user message
+                
+        Returns:
+            The bot's response to the initial message
+            
+        Raises:
+            Exception: If conversation has already started
+        """
         if type(args[0]) is list:
             argv, message = args
         else:
@@ -339,6 +436,14 @@ class Conversation(object):
         return await self.aresume(message)
 
     async def aresume(self, message):
+        """Continue the conversation asynchronously with a new message.
+        
+        Args:
+            message (str): The user's message
+            
+        Returns:
+            The bot's response, which may be a model response or canned response
+        """
         # Check for canned response first
         canned_response = self.bot.preprocess_response(message, self)
         is_tool_message = False
@@ -447,6 +552,14 @@ class Conversation(object):
         return message_out
     
     def resume(self, message):
+        """Continue the conversation with a new message.
+        
+        Args:
+            message (str): The user's message
+            
+        Returns:
+            The bot's response, which may be a model response or canned response
+        """
         # Check for canned response first
         canned_response = self.bot.preprocess_response(message, self)
         is_tool_message = False
@@ -539,6 +652,11 @@ class Conversation(object):
 
 
 class LoggedConversation(Conversation):
+    """A conversation that automatically logs all interactions to disk.
+    
+    Extends Conversation to provide persistent storage of conversation history
+    in JSON format, enabling conversation resumption and analysis.
+    """
     __slots__ = ['conversation_id', 'logs_dir', 'first_saved_at']
     def __init__(self, bot, **kwargs):
         if 'conversation_id' in kwargs:
@@ -594,6 +712,21 @@ class LoggedConversation(Conversation):
     
     @classmethod
     def revive(klass, bot, conversation_id, logs_dir, argv=[], **kwargs):
+        """Restore a previously logged conversation from disk.
+        
+        Args:
+            bot: The bot instance or class to use for the conversation
+            conversation_id (str): The unique identifier of the conversation to restore
+            logs_dir (str): Directory containing the conversation logs
+            argv (list): Template arguments for system prompt
+            **kwargs: Additional arguments to be passed to the superclass constructor
+            
+        Returns:
+            LoggedConversation: The restored conversation instance
+            
+        Raises:
+            UnknownConversationException: If the conversation ID is not found
+        """
         revenant = klass(bot, conversation_id=conversation_id, logs_dir=logs_dir, **kwargs)
         ## Find the chatlog to continue the conversation
         try:
@@ -610,11 +743,17 @@ class LoggedConversation(Conversation):
 
 
 class ConversationWithFiles(Conversation):
+    """Experimental conversation class that supports file attachments.
+    
+    Extends Conversation to handle image and file uploads alongside text messages.
+    Currently supports image files and has limitations around tool use and async operation.
+    """
     """This is experimental and needs work. Currently no async and no streaming. 
     Right now to use it you need to bypass resume() like:
         c = robo.ConversationWithFiles(Classifier, [])
         withjpeg = lambda fpath: c._resume_flat(None, [('image/jpeg', fpath)])
         withpng = lambda fpath: c._resume_flat(None, [('image/png', fpath)])
+    DOES NOT CURRENTLY SUPPORT TOOL USE
     """
     
     def _make_message_with_images(self, role, message, filespecs=[]):
@@ -657,6 +796,15 @@ class ConversationWithFiles(Conversation):
 
 
 def streamer(bot_or_conversation, args=[]):
+    """Create a streaming conversation function for real-time output.
+    
+    Args:
+        bot_or_conversation: Either a Bot instance/class or a Conversation with stream=True
+        args (list): Template arguments for system prompt
+        
+    Returns:
+        function: A function that takes a message and streams the response to stdout
+    """
     """If you're passing in a conversation, make sure it's got stream=True!"""
     if issubclass(type(bot_or_conversation), Conversation):
         convo = bot_or_conversation
@@ -671,6 +819,15 @@ def streamer(bot_or_conversation, args=[]):
     return streamit
 
 def streamer_async(bot_or_conversation, args=[]):
+    """Create an async streaming conversation function for real-time output.
+    
+    Args:
+        bot_or_conversation: Either a Bot instance/class or a Conversation with stream=True
+        args (list): Template arguments for system prompt
+        
+    Returns:
+        coroutine function: An async function that takes a message and streams the response to stdout
+    """
     if issubclass(type(bot_or_conversation), Conversation):
         convo = bot_or_conversation
     else:
