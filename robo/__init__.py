@@ -128,8 +128,6 @@ class Bot(object):
         return klass(client)
 
 
-
-
 class CannedResponse:
     """Wrapper for canned responses to distinguish them from API responses"""
     def __init__(self, text, include_in_context=True):
@@ -156,15 +154,6 @@ class CannedResponse:
     @property
     def text_stream(self):
         """Yield the entire text as a single chunk for streaming compatibility"""
-        yield self.text
-
-
-class CannedResponseAsync(CannedResponse):
-    @property
-    async def text_stream(self):
-        """Yield the entire text as a single chunk for streaming compatibility"""
-        """Claude tells me I'm violating the Liskov Substitution Principle or something but IDC TBH"""
-        """Haven't tested yet..."""
         yield self.text
 
 
@@ -241,6 +230,8 @@ class Conversation(object):
                     if cblock['type'] == 'tool_use':
                         tu_id = cblock['id']
                         break
+            if tu_id:
+                break
         return tu_id
     
     def _add_tool_request(self, request):
