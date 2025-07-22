@@ -240,6 +240,8 @@ class Conversation(object):
             self.messages.append(self._make_text_message('assistant', self.bot.welcome_message))
             self.message_objects.append(None)
             self.soft_started = True
+        else:
+            self.soft_started = False
         self.is_streaming = stream
         self.started = False
         if argv is not None:
