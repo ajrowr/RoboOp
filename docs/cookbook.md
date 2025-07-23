@@ -12,23 +12,46 @@ While a conversation with Claude or ChatGPT might seem to the user to be seamles
 While many people tend to think of LLMs as just being chatbots, they actually can be used in almost unlimited ways. Many of these applications are achieved through providing custom "system prompts" to the LLM that can direct its behaviour in ways that the user prompt cannot - you can think of the system prompt as being the LLM's "programming" within the context of a request.
 
 Some terminology:
-- LLM: Large Language Model. Examples include ChatGPT, Gemini (by Google), LLaMa (by Facebook) and Claude (which RoboOp is designed to interface with). 
+- LLM: Large Language Model. Examples include ChatGPT, Gemini (by Google), LLaMa (by Facebook) and Anthropic Inc's Claude (which RoboOp is designed to interface with).
 - User prompt: a message sent from the user to the model that prompts the generation of a response.
-- System prompt: a description of how the model should behave when responding to a user prompt, provided by the developer and invisible to (and unchangeable by) the user. Can include directives on persona, tone, output format, special capabilities and much more, as well as specialised information that the model may want or need to use in responding.
+- System prompt: a description of how the model should behave when responding to a user prompt, provided by the developer and invisible to (and unchangeable by) the user. Can include directives on persona, tone, output format, special capabilities and much more, as well as specialised information that the model may want or need to use in composing a response.
 - Tools: functions that an LLM can call to act on behalf of, or retrieve additional information for, the user.
 - Token: where humans tend to think in terms of words, LLMs process text as "tokens" - smaller chunks that might be whole words, parts of words, or even punctuation marks. For example, "understanding" might be split into "under" and "standing" as two tokens. This affects costs (you're often charged per token) and model limits (there's usually a maximum number of tokens the model can process at once).
 - Turn: a single exchange in a conversation with an LLM, consisting of one user message and the model's response to it. For example, if you ask "What's the weather like?" and the model responds, that's one turn. The conversation history is often measured in turns, and some LLMs have limits on how many turns they can remember or process at once.
 
+## Setting up
+
+You'll need a developer account with Anthropic to get an API key for use with RoboOp. You can get this process underway at [https://console.anthropic.com/](https://console.anthropic.com/), you'll probably need to buy some credits but you can get started with as little as $5USD.
+
+Once you have an API key you can add it to your add it to your environment like so (macOS and Linux, not sure about Windows sorry):
+
+```sh
+export ANTHROPIC_API_KEY="<the API key>"
+```
+
+To install RoboOp, download the .zip file from [here](https://github.com/ajrowr/RoboOp/archive/refs/heads/master.zip) and unzip it somewhere on your system. Then add it to your Python path:
+
+```sh
+export PYTHONPATH=$PYTHONPATH:/path/to/RoboOp
+```
+
+Then launch Python and you should be ready to go! The following examples assume that you start with:
+
+```python
+from robo import *
+```
+
 ## Recap
 
 Let's briefly revist the examples given in README.md .
+
+The fundamental objects of RoboOp are `Bot` and `Conversation`. Almost every meaningful use of RoboOp starts by subclassing `Bot`; on the other hand, you'd probably be trying to do something pretty specialised before you'd need to consider subclassing `Conversation`.
 
 ### streamer() and other convenience tools
 
 For convenience, the `robo` package includes a function called `streamer` which makes it easy to set up a conversation and stream responses. 
 
 ```python
->>> from robo import *
 >>> say = streamer(Bot)
 >>> say("Hello!")
 <a response from Claude ensues>
@@ -36,7 +59,7 @@ For convenience, the `robo` package includes a function called `streamer` which 
 
 This also allows passing in of values for fields, as shown below. You can also pass `streamer` an instance of Bot or Conversation (including subclasses). 
 
-Streaming generally gives the best user experience, but there's also a "flat" mode where the entire message is returned as a single object once it has been completely generated, as an `anthropic.types.message.Message` object which contains additional info that may be useful for debugging. You can print the text content from this easily with `printmsg`:
+Streaming generally gives the best user experience, but the default is "flat" mode where the entire message is returned as a single object once it has been completely generated, as an `anthropic.types.message.Message` object which contains additional info that may be useful for debugging. You can print the text content from this easily with `printmsg`:
 
 ```python
 >>> convo = Conversation(Bot, [])
@@ -85,13 +108,44 @@ Quack!
 >>> 
 ```
 
-Check `robo/models.py` for the models list, or just `dir(MODELS)` will do the trick. Default is `LATEST_SONNET` which is pretty much the best tradeoff between price and performance for most applications.
+Check `robo/models.py` for the models list, or just `dir(MODELS)` will do the trick. Default is `LATEST_SONNET` which represents a good tradeoff between price and performance for typical applications.
+
+### Different ways of setting up a Conversation
+
+There are a few different ways of setting up a `Conversation`, so you can use whichever feels most natural to you. Method 1 shows how to initiate a conversation with a bot that doesn't have any fields, and the others are roughly equivalent to each other.
+
+```python
+# Method 1
+>>> conv1 = Conversation(Bot)
+>>> printmsg(conv1.start('hello')) # If the bot doesn't have any fields that need values
+Hello! How are you doing today? Is there anything I can help you with?
+>>> printmsg(conv1.resume('hello'))
+Hello again! I'm here if you'd like to chat about something or if there's anything specific you'd like help with. What's on your mind?
+
+# Method 2
+>>> conv2 = Conversation(AnimalBot)
+>>> printmsg(conv2.start(['dog'], 'hello'))
+Woof!
+>>> printmsg(conv2.resume('hello'))
+Woof! Bark!
+
+# Method 3
+>>> conv3 = Conversation(AnimalBot)
+>>> conv3.prestart(['goose']) # Get the conversation ready for use without sending a message
+>>> printmsg(conv3.resume('hello'))
+Honk!
+
+# Method 4
+>>> conv4 = Conversation(AnimalBot, ['mouse']) # This prestarts the conversation automatically
+>>> printmsg(conv4.resume('hello'))
+Squeak!
+```
 
 And now, on to the new stuff!
 
 ## One-shot
 
-As mentioned earlier, a typical conversation with an LLM proceeds by feeding the pre-existing conversation back into the model with a new user message appended. But some bots don't actually need that context (eg. bots that do one thing and one thing only, and whose behaviour is specified by the system prompt). For such bots, feeding in the prior conversational context is not only a waste of tokens (and hence, money) but can also confuse the bot. That's where one-shot comes in - setting a bot as one-shot bypasses these concerns by providing no conversational context with a request.
+As mentioned earlier, a typical conversation with an LLM proceeds by feeding the pre-existing conversation back into the model with a new user message appended. But some bots don't actually need that context (eg. bots that do one thing and one thing only, and whose behaviour is specified by the system prompt). For such bots, feeding in the prior conversational context is not only a waste of tokens (and hence, money) but can also confuse the bot. That's where `oneshot` comes in - setting a bot as one-shot bypasses these concerns by preventing conversational context from being included with a request.
 
 ```python
 from robo import *
