@@ -47,7 +47,9 @@ Let's briefly revist the examples given in README.md .
 
 The fundamental objects of RoboOp are `Bot` and `Conversation`. Almost every meaningful use of RoboOp starts by subclassing `Bot`; on the other hand, you'd probably be trying to do something pretty specialised before you'd need to consider subclassing `Conversation`.
 
-### streamer() and other convenience tools
+There are two basic types of responses supplied by the Anthropic API - complete messages (which we call "flat" responses) - in which the entire response is composed before being made available as an object - and streaming responses, in which you get to see the response come in chunk-by-chunk, which is generally preferable for conversational scenarios.
+
+### `streamer()` and other convenience tools
 
 For convenience, the `robo` package includes a function called `streamer` which makes it easy to set up a conversation and stream responses. 
 
@@ -57,15 +59,19 @@ For convenience, the `robo` package includes a function called `streamer` which 
 <a response from Claude ensues>
 ```
 
-This also allows passing in of values for fields, as shown below. You can also pass `streamer` an instance of Bot or Conversation (including subclasses). 
+This also allows passing in of values for fields, as demonstrated in the "Fields" section below. You can also pass `streamer` an instance of Bot or one of its subclasses; or an instance of a subclass of Conversation (in which case, make sure that it's been instanciated with `stream=True`).
 
-Streaming generally gives the best user experience, but the default is "flat" mode where the entire message is returned as a single object once it has been completely generated, as an `anthropic.types.message.Message` object which contains additional info that may be useful for debugging. You can print the text content from this easily with `printmsg`:
+While streaming generally gives the best user experience for conversational applications, it is a bit more technical to work with so the default is "flat" mode, in which the fully-generated message is returned as an `anthropic.types.message.Message` object passed directly through from the underlying Anthropic API. This object contains additional info that may be useful for debugging. You can print the text content from this object easily with `printmsg`:
 
 ```python
 >>> convo = Conversation(Bot, [])
->>> msg = convo.resume('Hello!')
+>>> msg = convo.resume("Who are you?")
 >>> printmsg(msg)
-<text of the response message>
+I'm Claude, an AI assistant created by Anthropic. I'm here to help with a wide variety of tasks like
+answering questions, helping with analysis and research, creative projects, math and coding, and 
+having conversations. Is there something specific I can help you with today?
+>>> print(msg.usage)
+Usage(cache_creation_input_tokens=0, cache_read_input_tokens=0, input_tokens=11, output_tokens=60, server_tool_use=None, service_tier='standard')
 ```
 
 ### Fields
@@ -151,7 +157,8 @@ As mentioned earlier, a typical conversation with an LLM proceeds by feeding the
 from robo import *
 
 class YesMan(Bot):
-    sysprompt_text = """You respond with either 'Yes!' or 'No!', whichever is the opposite of what you said last turn. Always say 'Yes!' on the first turn."""
+    sysprompt_text = """You respond with either 'Yes!' or 'No!', whichever is the opposite of what 
+                        you said last turn. Always say 'Yes!' on the first turn."""
     oneshot = True
 
 >>> say = streamer(YesMan)
@@ -171,7 +178,11 @@ There are myriad applications that simply need the LLM to assess a piece of inpu
 
 ```python
 class ReviewAssessmentBot(Bot):
-    sysprompt_text = """You are a Google Review assessment assistant. Your task is to consider social media reviews for a restaurant and provide an estimate of how many stars (out of five) the review would seem to indicate, in the format {"stars_count": <number of stars>}. Do not add any explanations, context, or additional text before or after this response."""
+    sysprompt_text = """You are a Google Review assessment assistant. Your task is to consider 
+                        social media reviews for a restaurant and provide an estimate of how many 
+                        stars (out of five) the review would seem to indicate, in the format 
+                        {"stars_count": <number of stars>}. Do not add any explanations, context, 
+                        or additional text before or after this response."""
     oneshot = True
 
 >>> convo = Conversation(ReviewAssessmentBot, [])
