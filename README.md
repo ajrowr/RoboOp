@@ -81,4 +81,4 @@ convo.resume("Hey little buddy!")
 
 These examples all assume you've got your Anthropic API key defined via environment variable `ANTHROPIC_API_KEY` . If you need to do something different then you can instanciate the bot like `Animal.with_api_key(your_api_key)` instead (as `Conversation` will accept either a class or an instance in its constructor). Alternatively you can set `robo.API_KEY_FILE` (to load the key from a file) or `robo.API_KEY_ENV_VAR` (to nominate a different env var) sometime before creating your `Conversation` instance.
 
-This project doesn't (and probably will never) have a large amount of source code so if you're curious about anything then a peek at the source code will probably get you a quick answer!
+These examples barely scratch the surface of what's possible with RoboOp. Check out [docs/cookbook.md](docs/cookbook.md) for more!

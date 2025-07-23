@@ -818,6 +818,7 @@ def streamer(bot_or_conversation, args=[]):
         with convo.resume(message) as stream:
             for chunk in stream.text_stream:
                 print(chunk, end="", flush=True)
+        print()
     return streamit
 
 def streamer_async(bot_or_conversation, args=[]):
@@ -842,6 +843,11 @@ def streamer_async(bot_or_conversation, args=[]):
                 print(chunk, end="", flush=True)
     return streamit
 
+def printmsg(message):
+    for contentblock in message.content:
+        if hasattr(contentblock, 'text'):
+            print(contentblock.text)
+
 """
 To use streamer_async :
 >>> import asyncio
@@ -851,4 +857,4 @@ To use streamer_async :
 >>> asyncio.run(coro)
 """
 
-__all__ = ['Bot', 'Conversation', 'streamer', 'streamer_async', 'MODELS']
+__all__ = ['Bot', 'Conversation', 'streamer', 'streamer_async', 'printmsg', 'MODELS']
