@@ -407,53 +407,42 @@ class FetchAndAnalyseBot(Bot):
         }
 
 >>> say = streamer(FetchAndAnalyseBot)
->>> say("""Please summarise the fastest growing areas described in this document: https://www.stats.govt.nz/information-releases/2023-census-population-counts-by-ethnic-group-age-and-maori-descent-and-dwelling-counts/""")
-I'll fetch the content from that Statistics New Zealand URL to summarize the fastest growing areas 
-mentioned in the document.
+>>> say("Please summarise the fastest growing regions described in this document, and return the results in tabular form. https://www.stats.govt.nz/information-releases/2023-census-population-counts-by-ethnic-group-age-and-maori-descent-and-dwelling-counts/")
+I'll fetch the document from the provided URL and analyze it to identify the fastest growing regions.
 [[Fetching URL: https://www.stats.govt.nz/information-releases/2023-census-population-counts-by-ethnic-group-age-and-maori-descent-and-dwelling-counts/]]
-Based on the Statistics New Zealand document about the 2023 Census population counts, here are 
-the fastest growing areas described:
+Based on the document I've retrieved, I can identify the fastest growing regions mentioned in 
+the 2023 Census report. Here's a summary of the fastest growing regions in tabular form:
 
-## Territorial Authority Level - Fastest Growing Areas:
+| **Region/Area Type** | **Region/Area Name** | **Growth Rate (2018-2023)** | **Population Change** | **2023 Population** |
+|---------------------|---------------------|------------------------------|----------------------|---------------------|
+| **Regional Councils** | Tasman | 10.3% | +5,418 | 57,807 |
+| | Canterbury | 8.6% | +51,333 | 651,027 |
+| | Waikato | 8.9% | +40,569 | 498,771 |
+| | Northland | 8.3% | +14,931 | 194,007 |
+| | Bay of Plenty | 8.0%+ | Not specified | Not specified |
+| **Territorial Authorities** | Selwyn | 29.0% | +17,583 | 78,144 |
+| | Queenstown-Lakes | 22.1% | +8,655 | 47,808 |
+| **Auckland Local Boards** | Papakura | 25.5% | +14,682 | Not specified |
+| | Howick | 8.9% | +12,600 | Not specified |
 
-**1. Selwyn District** - The fastest growing territorial authority
-- Population increased by **29.0%** from 60,561 (2018) to 78,144 (2023)
-- Added almost 18,000 new residents
-- Growth has been consistent - previously grew 35.8% between 2013-2018
+**Key Findings:**
+- **Selwyn and Queenstown-Lakes** remain the fastest growing territorial authorities
+- **Tasman and Canterbury** were the fastest growing regions in the South Island
+- **Waikato and Northland** (regions neighboring Auckland) had the highest growth rates in the North Island
+- The **South Island** overall had a higher growth rate (7.3%) than the North Island (5.9%)
+- Growth rates have generally slowed compared to the 2013-2018 period
 
-**2. Queenstown-Lakes District** - Second fastest growing
-- Population increased by **22.1%** from 39,153 (2018) to 47,808 (2023)
-- Added about 8,700 new residents
-- Growth slowed from the previous period (38.7% between 2013-2018)
+**Slowest Growth:**
+- Southland: 2.7% increase
+- Wellington: 2.8% increase
+- Wellington city and Chatham Islands territory were the only areas to experience population decline
 
-## Regional Level - Fastest Growing Areas:
-
-**1. Tasman Region** - Fastest growing region
-- **10.3%** increase from 52,389 to 57,807 people
-
-**2. Waikato Region** - Second fastest in North Island
-- **8.9%** increase from 458,202 to 498,771 people
-
-**3. Canterbury Region** - Fast growing South Island region
-- **8.6%** increase from 599,694 to 651,027 people
-
-**4. Northland Region**
-- **8.3%** increase from 179,076 to 194,007 people
-
-**5. Bay of Plenty Region**
-- **8.0%** or more increase (exact figure not specified)
-
-## Auckland Local Board Areas:
-
-Within Auckland, the fastest growing local board areas were:
-- **Papakura** - 25.5% increase (14,682 new residents)
-- **Howick** - 8.9% increase (12,600 new residents)
-
-The document notes that the South Island overall had a higher growth rate (7.3%) compared to 
-the North Island (5.9%), despite the North Island having larger absolute population increases.
+The document notes that while Auckland remains the most populous region with nearly 1.66 million people, its growth rate halved from 11.0% (2013-2018) to 5.4% (2018-2023).
 ```
 
-Note the return structure:
+Note the name of the function that fulfils the tool call. In the schema, the `name` is given as `get_url`; when the model attempts to call a tool, RoboOp looks for a method of the Bot class named `tools_<tool name>` - in this case `tools_get_url` - and passes it the dictionary of arguments included in the tool call.
+
+Note also the return structure:
 
 ```python
 {
