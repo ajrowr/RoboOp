@@ -370,7 +370,7 @@ There are three basic modalities for tool use:
 - Parallel tool use - in which multiple tools are used to inform the response but they don't depend on each other.
 - Sequential tool use - in which the output from one or more tools are used to inform inputs for subsequent tool calls before generating a response.
 
-These modalities are not mutually exclusive, ie. they can be mixed together. As long as the tools are well specified, the model will generally be able to figure out which ones to use and when, and how to chain them together if needed. RoboOp can usually handle tool calls seamlessly. For more detail about tool use (and tool schemas) check out [Anthropic's documentation on the subject](https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/overview).
+These modalities are not mutually exclusive, ie. they can be mixed together. As long as the tools are well specified, the model will usually be able to figure out which ones to use and when, and how to chain them together if needed. RoboOp can generally handle tool calls seamlessly. For more detail about tool use (and tool schemas) check out [Anthropic's documentation on the subject](https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/overview).
 
 Here's a simple example of tool use in RoboOp:
 
@@ -407,37 +407,35 @@ class FetchAndAnalyseBot(Bot):
         }
 
 >>> say = streamer(FetchAndAnalyseBot)
->>> say("Please summarise the fastest growing regions described in this document, and return the results in tabular form. https://www.stats.govt.nz/information-releases/2023-census-population-counts-by-ethnic-group-age-and-maori-descent-and-dwelling-counts/")
-I'll fetch the document from the provided URL and analyze it to identify the fastest growing regions.
+>>> say("Please summarise (in one line each) the five fastest growing regional councils described in this document. https://www.stats.govt.nz/information-releases/2023-census-population-counts-by-ethnic-group-age-and-maori-descent-and-dwelling-counts/")
+I'll fetch the content from that Statistics New Zealand URL to find information about the fastest growing regional councils.
 [[Fetching URL: https://www.stats.govt.nz/information-releases/2023-census-population-counts-by-ethnic-group-age-and-maori-descent-and-dwelling-counts/]]
-Based on the document I've retrieved, I can identify the fastest growing regions mentioned in 
-the 2023 Census report. Here's a summary of the fastest growing regions in tabular form:
+I can see this is about the 2023 Census population counts, but the document doesn't appear to 
+contain information about the five fastest growing regional councils. Instead, it mentions some 
+fastest growing territorial authorities and regions. Let me look more carefully through the content 
+to see if there's information about regional council growth rates.
 
-| **Region/Area Type** | **Region/Area Name** | **Growth Rate (2018-2023)** | **Population Change** | **2023 Population** |
-|---------------------|---------------------|------------------------------|----------------------|---------------------|
-| **Regional Councils** | Tasman | 10.3% | +5,418 | 57,807 |
-| | Canterbury | 8.6% | +51,333 | 651,027 |
-| | Waikato | 8.9% | +40,569 | 498,771 |
-| | Northland | 8.3% | +14,931 | 194,007 |
-| | Bay of Plenty | 8.0%+ | Not specified | Not specified |
-| **Territorial Authorities** | Selwyn | 29.0% | +17,583 | 78,144 |
-| | Queenstown-Lakes | 22.1% | +8,655 | 47,808 |
-| **Auckland Local Boards** | Papakura | 25.5% | +14,682 | Not specified |
-| | Howick | 8.9% | +12,600 | Not specified |
+Looking at the content, I can see mentions of regional growth rates in the document. Here's what 
+I found about regional councils and their growth:
 
-**Key Findings:**
-- **Selwyn and Queenstown-Lakes** remain the fastest growing territorial authorities
-- **Tasman and Canterbury** were the fastest growing regions in the South Island
-- **Waikato and Northland** (regions neighboring Auckland) had the highest growth rates in the North Island
-- The **South Island** overall had a higher growth rate (7.3%) than the North Island (5.9%)
-- Growth rates have generally slowed compared to the 2013-2018 period
+The document mentions regional growth rates but doesn't explicitly list "the five fastest growing 
+regional councils." However, it does provide information about regional growth. Based on the 
+content, here are the regional councils with notable growth rates mentioned:
 
-**Slowest Growth:**
-- Southland: 2.7% increase
-- Wellington: 2.8% increase
-- Wellington city and Chatham Islands territory were the only areas to experience population decline
+1. **Tasman Regional Council** - 10.3% increase (from 52,389 to 57,807) - described as one of the 
+   fastest growing regions in the South Island
+2. **Canterbury Regional Council** - 8.6% increase (from 599,694 to 651,027) - second fastest growing 
+   in the South Island  
+3. **Waikato Regional Council** - 8.9% increase (from 458,202 to 498,771) - highest growth rate in 
+   the North Island
+4. **Northland Regional Council** - 8.3% increase (from 179,076 to 194,007) - high growth rate in 
+   the North Island
+5. **Otago Regional Council** - 6.0 to 7.9% increase (specific figure not provided but shown in 
+   this range on the map)
 
-The document notes that while Auckland remains the most populous region with nearly 1.66 million people, its growth rate halved from 11.0% (2013-2018) to 5.4% (2018-2023).
+Note: The document doesn't provide a complete ranking of all 16 regional councils, but these appear 
+to be among the fastest growing based on the information provided. Auckland, despite having the 
+largest population increase in absolute numbers, had a relatively slower growth rate of 5.4%.
 ```
 
 Note the name of the function that fulfils the tool call. In the schema, the `name` is given as `get_url`; when the model attempts to call a tool, RoboOp looks for a method of the Bot class named `tools_<tool name>` - in this case `tools_get_url` - and passes it the dictionary of arguments included in the tool call.
