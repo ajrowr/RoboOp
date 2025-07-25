@@ -304,7 +304,7 @@ The reason for this is that prompt caching applies to all segments up to and inc
 
 Note that you can use `set_cache_control` on multiple segments. Have a read of the Anthropic docs (linked above) for more on this.
 
-LLMs are very flexible about the type of textual data you can include in system prompts - as well as understanding structured data formats like JSON and YAML, generally if a human would find something easy to understand then an LLM almost certainly will too. It's worth keeping your token count in mind - for example if you have JSON or YAML data with a repetitive structure, it might be worth reformatting it as CSV or similar so that you're not squandering tokens on repeating the same field names over and over. In fact, the LLM can help with this:
+LLMs are very flexible about the type of textual data you can include in system prompts - as well as understanding structured data formats such as JSON, YAML and HTML, generally if a human would find something easy to understand then an LLM almost certainly will too. It's worth keeping your token count in mind - for example if you have JSON or YAML data with a repetitive structure, it might be worth reformatting it as CSV or similar so that you're not squandering tokens on repeating the same field names over and over. In fact, the LLM can help with this:
 
 ```python
 class ReformerBot(Bot):
@@ -359,6 +359,89 @@ Based on the data, there are two people with "Clem" in their name:
 - Zipcode: 31428-2261
 
 Which "Clem" were you looking for?
+```
+
+## Tool use
+
+Tool use is a powerful set of features that allow Claude to call functions to assist it in fulfilling a user's request. The scope of these functions is effectively limitless but it's important to carefully specify the tools so that the model can understand precisely when and how to use them.
+
+```python
+import requests
+
+class FetchAndAnalyseBot(Bot):
+    sysprompt_text = """Your task is to fetch data from a given URL and answer questions about it."""
+    
+    def get_tools_schema(self):
+        return [
+            {
+                "name": "get_url",
+                "description": "Fetch the raw HTML from a given URL.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "The URL to fetch"
+                        }
+                    },
+                    "required": ["url"]
+                }
+            }
+        ]
+    
+    def tools_get_url(self, url=None):
+        print(f"\n[[Fetching URL: {url}]]")
+        pagetext = requests.get(url).text
+        return {
+            'message': pagetext,
+            'target': 'model'
+        }
+
+>>> say = streamer(FetchAndAnalyseBot)
+>>> say("""Please summarise the fastest growing areas described in this document: https://www.stats.govt.nz/information-releases/2023-census-population-counts-by-ethnic-group-age-and-maori-descent-and-dwelling-counts/""")
+I'll fetch the content from that Statistics New Zealand URL to summarize the fastest growing areas 
+mentioned in the document.
+[[Fetching URL: https://www.stats.govt.nz/information-releases/2023-census-population-counts-by-ethnic-group-age-and-maori-descent-and-dwelling-counts/]]
+Based on the Statistics New Zealand document about the 2023 Census population counts, here are 
+the fastest growing areas described:
+
+## Territorial Authority Level - Fastest Growing Areas:
+
+**1. Selwyn District** - The fastest growing territorial authority
+- Population increased by **29.0%** from 60,561 (2018) to 78,144 (2023)
+- Added almost 18,000 new residents
+- Growth has been consistent - previously grew 35.8% between 2013-2018
+
+**2. Queenstown-Lakes District** - Second fastest growing
+- Population increased by **22.1%** from 39,153 (2018) to 47,808 (2023)
+- Added about 8,700 new residents
+- Growth slowed from the previous period (38.7% between 2013-2018)
+
+## Regional Level - Fastest Growing Areas:
+
+**1. Tasman Region** - Fastest growing region
+- **10.3%** increase from 52,389 to 57,807 people
+
+**2. Waikato Region** - Second fastest in North Island
+- **8.9%** increase from 458,202 to 498,771 people
+
+**3. Canterbury Region** - Fast growing South Island region
+- **8.6%** increase from 599,694 to 651,027 people
+
+**4. Northland Region**
+- **8.3%** increase from 179,076 to 194,007 people
+
+**5. Bay of Plenty Region**
+- **8.0%** or more increase (exact figure not specified)
+
+## Auckland Local Board Areas:
+
+Within Auckland, the fastest growing local board areas were:
+- **Papakura** - 25.5% increase (14,682 new residents)
+- **Howick** - 8.9% increase (12,600 new residents)
+
+The document notes that the South Island overall had a higher growth rate (7.3%) compared to 
+the North Island (5.9%), despite the North Island having larger absolute population increases.
 ```
 
 # More to come, watch this space! :)
