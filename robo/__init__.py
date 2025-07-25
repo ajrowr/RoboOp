@@ -50,6 +50,13 @@ class Bot(object):
         oneshot is for bots that don't need to maintain conversation context to do their job.
             Is NOT compatible with tool use!"""
     
+    @staticmethod
+    def _make_sysprompt_segment(text, set_cache_control=False):
+        return {
+            **{'type': 'text', 'text': text}, 
+            **({'cache_control': {'type': 'ephemeral'}} if set_cache_control else {})
+        }
+    
     def sysprompt_generate(self):
         """Generate a system prompt dynamically as an alternative to static text.
         
@@ -843,10 +850,18 @@ def streamer_async(bot_or_conversation, args=[]):
                 print(chunk, end="", flush=True)
     return streamit
 
-def printmsg(message):
+def gettext(message):
+    text_out = ''
     for contentblock in message.content:
         if hasattr(contentblock, 'text'):
-            print(contentblock.text)
+            text_out += contentblock.text
+    return text_out
+
+def getjson(message):
+    return json.loads(gettext(message))
+
+def printmsg(message):
+    print(gettext(message))
 
 """
 To use streamer_async :
@@ -857,4 +872,4 @@ To use streamer_async :
 >>> asyncio.run(coro)
 """
 
-__all__ = ['Bot', 'Conversation', 'streamer', 'streamer_async', 'printmsg', 'MODELS']
+__all__ = ['Bot', 'Conversation', 'streamer', 'streamer_async', 'gettext', 'getjson', 'printmsg', 'MODELS']
