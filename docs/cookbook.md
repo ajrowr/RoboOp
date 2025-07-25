@@ -289,7 +289,8 @@ drift. Shows how propaganda can be flipped on its head quicker than a Sunday roa
 the pigs are preachin' about animal equality, next minute they're struttin' around in Jones's 
 old threads, playin' cards with the human farmers.
 
-What gets me is how the poor sheep just keep parroting whatever they're told - reminds me of some conversations down at the local pub, if you catch my meaning! *winks*
+What gets me is how the poor sheep just keep parroting whatever they're told - reminds me of 
+some conversations down at the local pub, if you catch my meaning! *winks*
 
 So what's got you thinkin' about Animal Farm today, cobber? Fancy a yarn about how power corrupts, 
 or are you more interested in Orwell's take on revolutionary ideals gone pear-shaped?
@@ -302,5 +303,28 @@ Notice that:
 The reason for this is that prompt caching applies to all segments up to and including the one where `set_cache_control` is used. Prompt caching relies on the inputs being the same up to the cache control clause - if anything at all changes, the cache will miss - so the pattern of packing a final segment with the dynamic fields and caching up to the segment prior maximises the cacheability of your system prompt.
 
 Note that you can use `set_cache_control` on multiple segments. Have a read of the Anthropic docs (linked above) for more on this.
+
+LLMs are very flexible about the type of textual data you can include in system prompts - as well as understanding structured data formats like JSON and YAML, generally if a human would find something easy to understand then an LLM almost certainly will too. It's worth keeping your token count in mind - for example if you have JSON or YAML data with a repetitive structure, it might be worth reformatting it as CSV or similar so that you're not squandering tokens on repeating the same field names over and over. In fact, the LLM can help with this:
+
+```python
+class ReformerBot(Bot):
+    sysprompt_text = """You will be provided with a JSON dataset. Your task is to reformat it into a CSV-like format using the pipe character ("|") as field separator. Use these columns: id, name, username, email, city, zipcode, phone, company name, website, company catchphrase."""
+
+>>> import requests
+>>> conv = Conversation(ReformerBot, [])
+>>> msg = conv.resume(requests.get('https://jsonplaceholder.typicode.com/users').text)
+>>> printmsg(msg)
+id|name|username|email|city|zipcode|phone|company name|website|company catchphrase
+1|Leanne Graham|Bret|Sincere@april.biz|Gwenborough|92998-3874|1-770-736-8031 x56442|Romaguera-Crona|hildegard.org|Multi-layered client-server neural-net
+2|Ervin Howell|Antonette|Shanna@melissa.tv|Wisokyburgh|90566-7771|010-692-6593 x09125|Deckow-Crist|anastasia.net|Proactive didactic contingency
+3|Clementine Bauch|Samantha|Nathan@yesenia.net|McKenziehaven|59590-4157|1-463-123-4447|Romaguera-Jacobson|ramiro.info|Face to face bifurcated interface
+4|Patricia Lebsack|Karianne|Julianne.OConner@kory.org|South Elvis|53919-4257|493-170-9623 x156|Robel-Corkery|kale.biz|Multi-tiered zero tolerance productivity
+5|Chelsey Dietrich|Kamren|Lucio_Hettinger@annie.ca|Roscoeview|33263|(254)954-1289|Keebler LLC|demarco.info|User-centric fault-tolerant solution
+6|Mrs. Dennis Schulist|Leopoldo_Corkery|Karley_Dach@jasper.info|South Christy|23505-1337|1-477-935-8478 x6430|Considine-Lockman|ola.org|Synchronised bottom-line interface
+7|Kurtis Weissnat|Elwyn.Skiles|Telly.Hoeger@billy.biz|Howemouth|58804-1099|210.067.6132|Johns Group|elvis.io|Configurable multimedia task-force
+8|Nicholas Runolfsdottir V|Maxime_Nienow|Sherwood@rosamond.me|Aliyaview|45169|586.493.6943 x140|Abernathy Group|jacynthe.com|Implemented secondary concept
+9|Glenna Reichert|Delphine|Chaim_McDermott@dana.io|Bartholomebury|76495-3109|(775)976-6794 x41206|Yost and Sons|conrad.com|Switchable contextually-based project
+10|Clementina DuBuque|Moriah.Stanton|Rey.Padberg@karina.biz|Lebsackbury|31428-2261|024-648-3804|Hoeger LLC|ambrose.net|Centralized empowering task-force
+```
 
 # More to come, watch this space! :)
