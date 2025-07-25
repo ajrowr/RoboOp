@@ -365,6 +365,15 @@ Which "Clem" were you looking for?
 
 Tool use is a powerful set of features that allow Claude to call functions to assist it in fulfilling a user's request. The scope of these functions is effectively limitless but it's important to carefully specify the tools so that the model can understand precisely when and how to use them.
 
+There are three basic modalities for tool use:
+- Single tool - in which a single tool call is sufficient to inform the creation of a response.
+- Parallel tool use - in which multiple tools are used to inform the response but they don't depend on each other.
+- Sequential tool use - in which the output from one or more tools are used to inform inputs for subsequent tool calls before generating a response.
+
+These modalities are not mutually exclusive, ie. they can be mixed together. As long as the tools are well specified, the model will generally be able to figure out which ones to use and when, and how to chain them together if needed. RoboOp can usually handle tool calls seamlessly. For more detail about tool use (and tool schemas) check out [Anthropic's documentation on the subject](https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/overview).
+
+Here's a simple example of tool use in RoboOp:
+
 ```python
 import requests
 
@@ -443,5 +452,16 @@ Within Auckland, the fastest growing local board areas were:
 The document notes that the South Island overall had a higher growth rate (7.3%) compared to 
 the North Island (5.9%), despite the North Island having larger absolute population increases.
 ```
+
+Note the return structure:
+
+```python
+{
+    'message': <the output of the tool call>,
+    'target': <either 'model' or 'client'>
+}
+```
+
+While generally the output of a tool call is used by the model to inform the production of a response, for some use cases you might want use a tool call to send something to the client instead. For example if your application is a web-integrated chatbot, some tool calls may be intended to trigger functionality in the web application. We'll dig into this more in a future section, but for now, what you need to know is that if you want the model to receive the output of the tool call then set `target` to `'model'` and the output will automatically be routed correctly.
 
 # More to come, watch this space! :)
