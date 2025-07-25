@@ -221,18 +221,20 @@ from pathlib import Path
 
 class LiteraryAssistant(Bot):
     def sysprompt_generate(self): # Overriding the abstract method in Bot
+        datadir = Path('/path/to/data/')
+        novella_text = (datadir / 'franz-kafka-metamorphosis.txt').read_text()
         sysprompt_segments = [
             self._make_sysprompt_segment("""You are a knowledgeable literary assistant. The text 
-                of a well-known novella is provided to you so that you can answer questions about it.""")
+                of a well-known novella is provided to you so that you can answer questions about it."""),
+            self._make_sysprompt_segment(novella_text, set_cache_control=True)
         ]
-        datadir = Path('/path/to/data/')
-        noveltext = (datadir / 'franz-kafka-metamorphosis.txt').read_text()
-        sysprompt_segments.append(self._make_sysprompt_segment(noveltext, set_cache_control=True))
         return sysprompt_segments
 
 >>> say = streamer(LiteraryAssistant)
 >>> say("Man, this guy just can't catch a break huh?")
-You're absolutely right! Gregor Samsa's situation is relentlessly bleak from start to finish. He wakes up transformed into a giant insect, and instead of things getting better or him finding some way to adapt, everything just spirals downward.
+You're absolutely right! Gregor Samsa's situation is relentlessly bleak from start to finish. He wakes 
+up transformed into a giant insect, and instead of things getting better or him finding some way to 
+adapt, everything just spirals downward.
 
 What's particularly tragic is how his initial concerns are so mundane and human - he's worried about 
 being late for work and losing his job, even while dealing with having multiple legs and an insect 
@@ -249,6 +251,6 @@ thoroughly hopeless Gregor's circumstances become, making it a perfect example o
 vision of modern alienation.
 ```
 
-There are a few things here worth noting. `Bot._make_sysprompt_segment(...)` has been provided as a convenient way of generating the correct structure for a multi-segment text-only system prompt. The `set_cache_control` argument, when set `True`, adds cache control clauses to the segment that enable system prompt caching. For large system prompts, prompt caching is highly recommended as it can significantly reduce costs. Further recommended reading is [here](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) but essentially, cache control clauses are best placed on the last segment of the system prompt that is unlikely to change frequently between requests.
+There are a few things here worth noting. `Bot._make_sysprompt_segment(...)` has been provided as a convenient way of generating the correct segment structure for a multi-segment text-only system prompt. The `set_cache_control` argument, when set `True`, adds cache control clauses to the segment that enable system prompt caching. For large system prompts, prompt caching is highly recommended as it can significantly reduce costs. It's worth taking a look at [Anthropic's prompt caching documentation](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) to better understand the subject, but put simply, `set_cache_control=True` is best used on the last segment of the system prompt that is unlikely to change between requests.
 
 # More to come, watch this space! :)
