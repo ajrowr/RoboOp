@@ -59,9 +59,9 @@ For convenience, the `robo` package includes a function called `streamer` which 
 <a response from Claude ensues>
 ```
 
-This also allows passing in of values for fields, as demonstrated in the "Fields" section below. You can also pass `streamer` an instance of Bot or one of its subclasses; or an instance of a subclass of Conversation (in which case, make sure that it's been instanciated with `stream=True`).
+This also allows passing in of values for fields, as demonstrated in the "Fields" section below. Alternatively to passing a `Bot` class as first argument, you can also pass `streamer` an _instance_ of `Bot` or one of its subclasses; or an instance of a subclass of `Conversation` (in which case, make sure that it's been instanciated with `stream=True`).
 
-While streaming generally gives the best user experience for conversational applications, it is a bit more technical to work with so the default is "flat" mode, in which the fully-generated message is returned as an `anthropic.types.message.Message` object passed directly through from the underlying Anthropic API. This object contains additional info that may be useful for debugging. You can print the text content from this object easily with `printmsg`:
+While streaming generally gives the best user experience for conversational applications, it can (absent `streamer`) be a bit more technical to work with so the default is "flat" mode, in which the fully-generated message is returned as an `anthropic.types.message.Message` object passed directly through from the underlying Anthropic API. This object contains additional info that may be useful for debugging. You can print the text content from this object easily with `printmsg`:
 
 ```python
 >>> convo = Conversation(Bot, [])
@@ -71,8 +71,11 @@ I'm Claude, an AI assistant created by Anthropic. I'm here to help with a wide v
 answering questions, helping with analysis and research, creative projects, math and coding, and 
 having conversations. Is there something specific I can help you with today?
 >>> print(msg.usage)
-Usage(cache_creation_input_tokens=0, cache_read_input_tokens=0, input_tokens=11, output_tokens=60, server_tool_use=None, service_tier='standard')
+Usage(cache_creation_input_tokens=0, cache_read_input_tokens=0, input_tokens=11, 
+      output_tokens=60, server_tool_use=None, service_tier='standard')
 ```
+
+We also have `gettext(msg)` which returns a `str` and `getjson(msg)` which parses JSON from the message content.
 
 ### Fields
 
@@ -147,6 +150,12 @@ Honk!
 Squeak!
 ```
 
+One more thing, if you wish to use method 4 to begin a conversation with a bot that doesn't take parameters, you'll need to pass an empty list (as the presence of that argument is what triggers the automatic prestart):
+
+```python
+>>> conv = Conversation(Bot, [])
+```
+
 And now, on to the new stuff!
 
 ## One-shot
@@ -186,12 +195,60 @@ class ReviewAssessmentBot(Bot):
     oneshot = True
 
 >>> convo = Conversation(ReviewAssessmentBot, [])
->>> printmsg(convo.resume("""Absolutely delicious, would definitely dine here again"""))
-{"stars_count": 5}
->>> printmsg(convo.resume("""Food was okay but the service was kinda slow despite the place being half empty."""))
-{"stars_count": 3}
->>> printmsg(convo.resume("""The staff were rude and I found a slug in my salad! I won't be back!"""))
-{"stars_count": 1}
+>>> getjson(convo.resume("""Absolutely delicious, would definitely dine here again"""))
+{'stars_count': 5}
+>>> getjson(convo.resume("""Food was okay but the service was kinda slow despite the place being half empty."""))
+{'stars_count': 3}
+>>> getjson(convo.resume("""The staff were rude and I found a slug in my salad! I won't be back!"""))
+{'stars_count': 1}
 ```
+
+## Dynamic system prompts
+
+So far we have seen system prompts that consist of inline text, which is fine for simple bots, but for more sophisticated applications you may want more flexibility about how to specify your sysprompts.
+
+A basic form of this is `sysprompt_path`, which lets you read the system prompt from a textfile:
+
+```python
+class SyspromptFromFileBot(Bot):
+    sysprompt_path = '/path/to/sysprompt.txt'
+```
+
+System prompts can quickly get large and elaborate, so defining them as inline text in a class can become unwieldy, in which case using a textfile in this way is a helpful option. But Claude also supports system prompts as structured data, which can unlock powerful features such as prompt caching and knowledge base integration. That's where `sysprompt_generate()` comes in.
+
+```python
+from pathlib import Path
+
+class LiteraryAssistant(Bot):
+    def sysprompt_generate(self): # Overriding the abstract method in Bot
+        sysprompt_segments = [
+            self._make_sysprompt_segment("""You are a knowledgeable literary assistant. The text 
+                of a well-known novella is provided to you so that you can answer questions about it.""")
+        ]
+        datadir = Path('/path/to/data/')
+        noveltext = (datadir / 'franz-kafka-metamorphosis.txt').read_text()
+        sysprompt_segments.append(self._make_sysprompt_segment(noveltext, set_cache_control=True))
+        return sysprompt_segments
+
+>>> say = streamer(LiteraryAssistant)
+>>> say("Man, this guy just can't catch a break huh?")
+You're absolutely right! Gregor Samsa's situation is relentlessly bleak from start to finish. He wakes up transformed into a giant insect, and instead of things getting better or him finding some way to adapt, everything just spirals downward.
+
+What's particularly tragic is how his initial concerns are so mundane and human - he's worried about 
+being late for work and losing his job, even while dealing with having multiple legs and an insect 
+body. Then his family, who he's been supporting financially, gradually shifts from shock and concern 
+to viewing him as a burden and eventually as something that needs to be eliminated.
+
+The "breaks" he does get are pitiful - like when his sister brings him food scraps, or when he gets 
+to listen to her violin playing. Even those small comforts are eventually taken away. By the end, 
+he's literally pelted with apples by his own father and left to waste away, ignored and unloved.
+
+Kafka really doesn't offer Gregor any redemption or escape - it's a masterclass in depicting someone 
+trapped in an impossible situation that only gets worse. The story's power comes partly from how 
+thoroughly hopeless Gregor's circumstances become, making it a perfect example of Kafka's absurdist 
+vision of modern alienation.
+```
+
+There are a few things here worth noting. `Bot._make_sysprompt_segment(...)` has been provided as a convenient way of generating the correct structure for a multi-segment text-only system prompt. The `set_cache_control` argument, when set `True`, adds cache control clauses to the segment that enable system prompt caching. For large system prompts, prompt caching is highly recommended as it can significantly reduce costs. Further recommended reading is [here](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) but essentially, cache control clauses are best placed on the last segment of the system prompt that is unlikely to change frequently between requests.
 
 # More to come, watch this space! :)
