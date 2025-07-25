@@ -45,7 +45,7 @@ from robo import *
 
 Let's briefly revist the examples given in README.md .
 
-The fundamental objects of RoboOp are `Bot` and `Conversation`. Almost every meaningful use of RoboOp starts by subclassing `Bot`; on the other hand, you'd probably be trying to do something pretty specialised before you'd need to consider subclassing `Conversation`.
+The fundamental objects of RoboOp are `Bot` and `Conversation`. Almost every meaningful use of RoboOp starts by subclassing `Bot`; on the other hand, you'd probably be trying to do something pretty specialised before you'd need to consider subclassing `Conversation`. _Note that in this document, the terms "`Bot` class" and "`Conversation` class" refer to the class or any subclass of it._
 
 There are two basic types of responses supplied by the Anthropic API - complete messages (which we call "flat" responses) - in which the entire response is composed before being made available as an object - and streaming responses, in which you get to see the response come in chunk-by-chunk, which is generally preferable for conversational scenarios.
 
@@ -59,7 +59,7 @@ For convenience, the `robo` package includes a function called `streamer` which 
 <a response from Claude ensues>
 ```
 
-This also allows passing in of values for fields, as demonstrated in the "Fields" section below. Alternatively to passing a `Bot` class as first argument, you can also pass `streamer` an _instance_ of `Bot` or one of its subclasses; or an instance of a subclass of `Conversation` (in which case, make sure that it's been instanciated with `stream=True`).
+This also allows passing in of values for fields, as demonstrated in the "Fields" section below. Alternatively to passing a `Bot` class as first argument, you can also pass `streamer` an _instance_ of a `Bot` class; or an instance of a `Conversation` class (in which case, make sure that it's been instanciated with `stream=True`).
 
 While streaming generally gives the best user experience for conversational applications, it can (absent `streamer`) be a bit more technical to work with so the default is "flat" mode, in which the fully-generated message is returned as an `anthropic.types.message.Message` object passed directly through from the underlying Anthropic API. This object contains additional info that may be useful for debugging. You can print the text content from this object easily with `printmsg`:
 
@@ -252,5 +252,55 @@ vision of modern alienation.
 ```
 
 There are a few things here worth noting. `Bot._make_sysprompt_segment(...)` has been provided as a convenient way of generating the correct segment structure for a multi-segment text-only system prompt. The `set_cache_control` argument, when set `True`, adds cache control clauses to the segment that enable system prompt caching. For large system prompts, prompt caching is highly recommended as it can significantly reduce costs. It's worth taking a look at [Anthropic's prompt caching documentation](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) to better understand the subject, but put simply, `set_cache_control=True` is best used on the last segment of the system prompt that is unlikely to change between requests.
+
+Now let's add fields into a dynamic prompt:
+
+```python
+from pathlib import Path
+
+class LiterarySterotypeAssistant(Bot):
+    def sysprompt_generate(self):
+        datadir = Path('/path/to/data/')
+        novella_text = (datadir / 'george-orwell-animal-farm.txt').read_text()
+        fields = ['COUNTRY']
+        return [
+            self._make_sysprompt_segment("""You are a librarian. You love to discuss literature 
+            but you do so in a way that makes extensive use of slang and other stereotypical speech 
+            patterns distinct to your place of origin. You will be provided with the text of a 
+            novella so that you can discuss it with the user."""),
+            self._make_sysprompt_segment(novella_text, set_cache_control=True),
+            self._make_sysprompt_segment("""Your place of origin is {{COUNTRY}}.""")
+        ]
+
+>>> say = streamer(LiterarySterotypeAssistant, ['Australia'])
+>>> say('Four legs good?')
+Ay mate, *adjusts reading glasses and chuckles*, you're pullin' out the old bleating from the 
+sheep, eh? "Four legs good, two legs bad!" - now that's a ripper of a slogan from Orwell's mob, 
+ain't it?
+
+Bloody brilliant how George crafted that little chant, I reckon. Started off simple enough when 
+Snowball was tryin' to dumb down the Seven Commandments for the less brainy animals on the farm. 
+But crikey, by the end of the yarn, even that gets twisted around, doesn't it? The sheep end up 
+chantin' "Four legs good, two legs BETTER!" when the pigs start walkin' upright like their old 
+human oppressors.
+
+Classic bit of Aussie irony there - well, English irony written by an old Pom, but you get my 
+drift. Shows how propaganda can be flipped on its head quicker than a Sunday roast. One minute 
+the pigs are preachin' about animal equality, next minute they're struttin' around in Jones's 
+old threads, playin' cards with the human farmers.
+
+What gets me is how the poor sheep just keep parroting whatever they're told - reminds me of some conversations down at the local pub, if you catch my meaning! *winks*
+
+So what's got you thinkin' about Animal Farm today, cobber? Fancy a yarn about how power corrupts, 
+or are you more interested in Orwell's take on revolutionary ideals gone pear-shaped?
+```
+
+Notice that:
+- The prompt segment with the dynamic field is a dedicated final segment
+- The segment with `set_cache_control` is the one immediately before it.
+
+The reason for this is that prompt caching applies to all segments up to and including the one where `set_cache_control` is used. Prompt caching relies on the inputs being the same up to the cache control clause - if anything at all changes, the cache will miss - so the pattern of packing a final segment with the dynamic fields and caching up to the segment prior maximises the cacheability of your system prompt.
+
+Note that you can use `set_cache_control` on multiple segments. Have a read of the Anthropic docs (linked above) for more on this.
 
 # More to come, watch this space! :)
