@@ -308,7 +308,9 @@ LLMs are very flexible about the type of textual data you can include in system 
 
 ```python
 class ReformerBot(Bot):
-    sysprompt_text = """You will be provided with a JSON dataset. Your task is to reformat it into a CSV-like format using the pipe character ("|") as field separator. Use these columns: id, name, username, email, city, zipcode, phone, company name, website, company catchphrase."""
+    sysprompt_text = """You will be provided with a JSON dataset. Your task is to reformat it into 
+        a CSV-like format using the pipe character ("|") as field separator. Use these columns: 
+        id, name, username, email, city, zipcode, phone, company name, website, company catchphrase."""
 
 >>> import requests
 >>> conv = Conversation(ReformerBot, [])
@@ -325,6 +327,38 @@ id|name|username|email|city|zipcode|phone|company name|website|company catchphra
 8|Nicholas Runolfsdottir V|Maxime_Nienow|Sherwood@rosamond.me|Aliyaview|45169|586.493.6943 x140|Abernathy Group|jacynthe.com|Implemented secondary concept
 9|Glenna Reichert|Delphine|Chaim_McDermott@dana.io|Bartholomebury|76495-3109|(775)976-6794 x41206|Yost and Sons|conrad.com|Switchable contextually-based project
 10|Clementina DuBuque|Moriah.Stanton|Rey.Padberg@karina.biz|Lebsackbury|31428-2261|024-648-3804|Hoeger LLC|ambrose.net|Centralized empowering task-force
+```
+
+Let's use the above data as an example of a simple knowledge base.
+
+```python
+# using msg from previous example
+
+class KBBot(Bot):
+    def sysprompt_generate(self):
+        return [
+            self._make_sysprompt_segment("""You will be provided with some data. Your task is 
+                to answer questions about it."""),
+            self._make_sysprompt_segment(gettext(msg))
+        ]
+
+>>> say = streamer(KBBot)
+>>> say("contact details for clem?")
+Based on the data, there are two people with "Clem" in their name:
+
+**Clementine Bauch:**
+- Email: Nathan@yesenia.net
+- Phone: 1-463-123-4447
+- City: McKenziehaven
+- Zipcode: 59590-4157
+
+**Clementina DuBuque:**
+- Email: Rey.Padberg@karina.biz
+- Phone: 024-648-3804
+- City: Lebsackbury
+- Zipcode: 31428-2261
+
+Which "Clem" were you looking for?
 ```
 
 # More to come, watch this space! :)
