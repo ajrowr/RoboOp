@@ -93,7 +93,7 @@ We also have `gettext(msg)` which returns a `str` and `getjson(msg)` which parse
 
 ### Fields
 
-Fields allow for interpolation of conversation-specific parameters into the system prompt.
+Fields allow for interpolation of conversation-specific parameters into the system prompt. When initialising a conversation, you can pass field values as a list (in which case the values must be in the same order as the `fields` definition) or a dictionary.
 
 ```python
 class PoetryBot(Bot):
@@ -105,7 +105,7 @@ class PoetryBot(Bot):
 Towering steel and glass,
 Yellow cabs weave through the rush—
 Dreams rise with the dawn.
->>> say = streamer(PoetryBot, ['limerick'])
+>>> say = streamer(PoetryBot, {'POEM_TYPE': 'limerick'})
 >>> say('San Francisco')
 There once was a city by the bay,
 Where fog rolls in nearly each day,
@@ -162,9 +162,12 @@ Honk!
 >>> conv4 = Conversation(AnimalBot, ['mouse']) # This prestarts the conversation automatically
 >>> printmsg(conv4.resume('hello'))
 Squeak!
+>>> conv4a = Conversation(AnimalBot, {'ANIMAL_TYPE': 'horse'}) # Using a dict instead
+>>> printmsg(conv4a.resume('hello'))
+Neigh!
 ```
 
-One more thing, if you wish to use method 4 to begin a conversation with a bot that doesn't take parameters, you'll need to pass an empty list (as the presence of that argument is what triggers the automatic prestart):
+One more thing, if you wish to use method 4 to begin a conversation with a bot that doesn't take parameters, you'll need to pass an empty list or dict (as the presence of that argument is what triggers the automatic prestart):
 
 ```python
 >>> conv = Conversation(Bot, [])

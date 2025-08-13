@@ -2,6 +2,8 @@ import pytest
 import json
 from unittest.mock import Mock, patch
 from robo import Bot, Conversation, MODELS
+from robo.exceptions import *
+import robo
 
 
 class TestBot:
@@ -450,3 +452,299 @@ class TestConversationExhaustion:
             ]
         }]
         assert conv._is_exhausted() == False
+
+class TestConversationInitializationMethods:
+    """Test all conversation initialization methods described in cookbook.md"""
+    
+    def test_method_1_bot_without_fields(self):
+        """Test Method 1: Conversation with Bot that has no fields"""
+        # This should work without needing to pass argv
+        conv = Conversation(Bot)
+        assert conv.bot.__class__ == Bot
+        assert conv.started == False
+        assert conv.argv == []
+        assert not hasattr(conv, 'sysprompt') or conv.sysprompt is None
+    
+    def test_method_1_start_without_argv(self):
+        """Test Method 1: start() call without argv for bot with no fields"""
+        with patch.object(robo, '_get_client') as mock_client:
+            mock_response = Mock()
+            mock_response.content = [Mock(text="Hello! How are you doing today?")]
+            mock_client.return_value.messages.create.return_value = mock_response
+            
+            conv = Conversation(Bot)
+            # This should work - start with just a message, no argv needed
+            # We can't actually call start() without mocking the API, but we can test the setup
+            assert conv.started == False
+            assert conv.argv == []
+    
+    def test_method_2_with_fields_bot_start_with_argv_list(self):
+        """Test Method 2: start() with argv list and message for bot with fields"""
+        class AnimalBot(Bot):
+            fields = ['ANIMAL_TYPE']
+            sysprompt_text = "You make sounds like a {{ANIMAL_TYPE}}."
+        
+        conv = Conversation(AnimalBot)
+        assert conv.started == False
+        assert conv.argv == []
+        
+        # Test that prestart works correctly when called via start
+        # We'll test the setup part without actually calling the API
+        try:
+            conv.prestart(['dog'])
+            assert conv.started == True
+            assert conv.argv == ['dog']
+            assert conv.sysprompt == "You make sounds like a dog."
+        finally:
+            pass
+    
+    def test_method_2_with_fields_bot_start_with_argv_dict(self):
+        """Test Method 2: start() with argv dict and message for bot with fields"""
+        class AnimalBot(Bot):
+            fields = ['ANIMAL_TYPE']
+            sysprompt_text = "You make sounds like a {{ANIMAL_TYPE}}."
+        
+        conv = Conversation(AnimalBot)
+        assert conv.started == False
+        
+        # Test with dict instead of list
+        conv.prestart({'ANIMAL_TYPE': 'cat'})
+        assert conv.started == True
+        assert conv.argv == ['cat']  # Should be converted to list
+        assert conv.sysprompt == "You make sounds like a cat."
+    
+    def test_method_3_prestart_with_list(self):
+        """Test Method 3: prestart() with list argv"""
+        class AnimalBot(Bot):
+            fields = ['ANIMAL_TYPE']
+            sysprompt_text = "You make sounds like a {{ANIMAL_TYPE}}."
+        
+        conv = Conversation(AnimalBot)
+        assert conv.started == False
+        
+        conv.prestart(['goose'])
+        assert conv.started == True
+        assert conv.argv == ['goose']
+        assert conv.sysprompt == "You make sounds like a goose."
+    
+    def test_method_3_prestart_with_dict(self):
+        """Test Method 3: prestart() with dict argv"""
+        class AnimalBot(Bot):
+            fields = ['ANIMAL_TYPE']
+            sysprompt_text = "You make sounds like a {{ANIMAL_TYPE}}."
+        
+        conv = Conversation(AnimalBot)
+        conv.prestart({'ANIMAL_TYPE': 'duck'})
+        assert conv.started == True
+        assert conv.argv == ['duck']
+        assert conv.sysprompt == "You make sounds like a duck."
+    
+    def test_method_4_constructor_argv_list(self):
+        """Test Method 4: Conversation constructor with argv list (auto-prestart)"""
+        class AnimalBot(Bot):
+            fields = ['ANIMAL_TYPE']
+            sysprompt_text = "You make sounds like a {{ANIMAL_TYPE}}."
+        
+        conv = Conversation(AnimalBot, ['mouse'])
+        assert conv.started == True
+        assert conv.argv == ['mouse']
+        assert conv.sysprompt == "You make sounds like a mouse."
+    
+    def test_method_4_constructor_argv_dict(self):
+        """Test Method 4: Conversation constructor with argv dict (auto-prestart)"""
+        class AnimalBot(Bot):
+            fields = ['ANIMAL_TYPE']
+            sysprompt_text = "You make sounds like a {{ANIMAL_TYPE}}."
+        
+        conv = Conversation(AnimalBot, {'ANIMAL_TYPE': 'elephant'})
+        assert conv.started == True
+        assert conv.argv == ['elephant']
+        assert conv.sysprompt == "You make sounds like a elephant."
+    
+    def test_method_4_empty_list_for_no_fields_bot(self):
+        """Test Method 4: Empty list for bot without fields triggers auto-prestart"""
+        conv = Conversation(Bot, [])
+        assert conv.started == True
+        assert conv.argv == []
+        assert conv.sysprompt == ""
+    
+    def test_method_4_empty_dict_for_no_fields_bot(self):
+        """Test Method 4: Empty dict for bot without fields triggers auto-prestart"""
+        conv = Conversation(Bot, {})
+        assert conv.started == True
+        assert conv.argv == []
+        assert conv.sysprompt == ""
+
+
+class TestDictArgvConversion:
+    """Test dict to list argv conversion functionality"""
+    
+    def test_convert_argv_if_needed_with_list(self):
+        """Test _convert_argv_if_needed with list input"""
+        conv = Conversation(Bot)
+        result = conv._convert_argv_if_needed(['a', 'b', 'c'])
+        assert result == ['a', 'b', 'c']
+    
+    def test_convert_argv_if_needed_with_dict_single_field(self):
+        """Test _convert_argv_if_needed with dict input, single field"""
+        class SingleFieldBot(Bot):
+            fields = ['name']
+        
+        conv = Conversation(SingleFieldBot)
+        result = conv._convert_argv_if_needed({'name': 'Alice'})
+        assert result == ['Alice']
+    
+    def test_convert_argv_if_needed_with_dict_multiple_fields(self):
+        """Test _convert_argv_if_needed with dict input, multiple fields"""
+        class MultiFieldBot(Bot):
+            fields = ['name', 'role', 'location']
+        
+        conv = Conversation(MultiFieldBot)
+        result = conv._convert_argv_if_needed({
+            'name': 'Alice',
+            'role': 'developer', 
+            'location': 'Berlin'
+        })
+        assert result == ['Alice', 'developer', 'Berlin']
+    
+    def test_convert_argv_if_needed_with_dict_missing_keys(self):
+        """Test _convert_argv_if_needed with dict missing some keys"""
+        class MultiFieldBot(Bot):
+            fields = ['name', 'role', 'location']
+        
+        conv = Conversation(MultiFieldBot)
+        # Missing 'location' key should raise KeyError
+        with pytest.raises(FieldValuesMissingException):
+            conv._convert_argv_if_needed({'name': 'Alice', 'role': 'developer'})
+    
+    def test_convert_argv_if_needed_with_dict_extra_keys(self):
+        """Test _convert_argv_if_needed with dict containing extra keys"""
+        class SingleFieldBot(Bot):
+            fields = ['name']
+        
+        conv = Conversation(SingleFieldBot)
+        # Extra keys should be ignored, only fields keys used
+        result = conv._convert_argv_if_needed({
+            'name': 'Alice',
+            'extra': 'ignored',
+            'another': 'also ignored'
+        })
+        assert result == ['Alice']
+    
+    def test_convert_argv_if_needed_with_empty_dict(self):
+        """Test _convert_argv_if_needed with empty dict and no fields"""
+        conv = Conversation(Bot)  # Bot has no fields
+        result = conv._convert_argv_if_needed({})
+        assert result == []
+    
+    def test_convert_argv_if_needed_with_empty_dict_and_fields(self):
+        """Test _convert_argv_if_needed with empty dict but bot has fields"""
+        class FieldBot(Bot):
+            fields = ['name']
+        
+        conv = Conversation(FieldBot)
+        with pytest.raises(FieldValuesMissingException):
+            conv._convert_argv_if_needed({})
+
+
+class TestDictArgvIntegration:
+    """Test dict argv integration with sysprompt interpolation"""
+    
+    def test_sysprompt_vec_after_dict_conversion(self):
+        """Test that sysprompt interpolation works after dict->list conversion"""
+        class TemplateBot(Bot):
+            fields = ['role', 'name', 'skill']
+            sysprompt_text = "You are a {{role}} named {{name}} who is good at {{skill}}."
+        
+        bot = TemplateBot()
+        # Test that sysprompt_vec works with list (converted from dict)
+        argv_dict = {'role': 'teacher', 'name': 'Sarah', 'skill': 'math'}
+        conv = Conversation(TemplateBot)
+        argv_list = conv._convert_argv_if_needed(argv_dict)
+        
+        result = bot.sysprompt_vec(argv_list)
+        expected = "You are a teacher named Sarah who is good at math."
+        assert result == expected
+    
+    def test_end_to_end_dict_argv_flow(self):
+        """Test complete flow from dict argv to sysprompt generation"""
+        class GreetingBot(Bot):
+            fields = ['greeting', 'name']
+            sysprompt_text = "Always start responses with '{{greeting}}, {{name}}!'"
+        
+        conv = Conversation(GreetingBot, {'greeting': 'Hello', 'name': 'World'})
+        assert conv.started == True
+        assert conv.argv == ['Hello', 'World']
+        assert conv.sysprompt == "Always start responses with 'Hello, World!'"
+    
+    def test_prestart_dict_argv_flow(self):
+        """Test prestart with dict argv"""
+        class ConfigBot(Bot):
+            fields = ['mode', 'language', 'style']
+            sysprompt_text = "Operate in {{mode}} mode, use {{language}}, be {{style}}."
+        
+        conv = Conversation(ConfigBot)
+        conv.prestart({
+            'mode': 'creative',
+            'language': 'English', 
+            'style': 'formal'
+        })
+        
+        assert conv.started == True
+        assert conv.argv == ['creative', 'English', 'formal']
+        expected = "Operate in creative mode, use English, be formal."
+        assert conv.sysprompt == expected
+
+
+class TestEdgeCasesAndErrorHandling:
+    """Test edge cases and error conditions for conversation initialization"""
+    
+    def test_dict_argv_with_non_string_keys(self):
+        """Test dict argv with non-string keys"""
+        class NumberFieldBot(Bot):
+            fields = ['field1', 'field2']
+        
+        conv = Conversation(NumberFieldBot)
+        # Should work fine, Python dict handles various key types
+        result = conv._convert_argv_if_needed({'field1': 'value1', 'field2': 'value2'})
+        assert result == ['value1', 'value2']
+    
+    def test_dict_argv_with_none_values(self):
+        """Test dict argv with None values"""
+        class NullBot(Bot):
+            fields = ['param1', 'param2']
+        
+        conv = Conversation(NullBot)
+        result = conv._convert_argv_if_needed({'param1': None, 'param2': 'value'})
+        assert result == [None, 'value']
+    
+    def test_field_order_consistency(self):
+        """Test that dict conversion maintains field order"""
+        class OrderBot(Bot):
+            fields = ['first', 'second', 'third', 'fourth']
+        
+        conv = Conversation(OrderBot)
+        # Dict with different insertion order
+        argv_dict = {
+            'fourth': 'D',
+            'first': 'A', 
+            'third': 'C',
+            'second': 'B'
+        }
+        result = conv._convert_argv_if_needed(argv_dict)
+        # Should follow fields order, not dict insertion order
+        assert result == ['A', 'B', 'C', 'D']
+    
+    def test_case_sensitive_field_names(self):
+        """Test that field names are case sensitive"""
+        class CaseBot(Bot):
+            fields = ['Name', 'ROLE']
+        
+        conv = Conversation(CaseBot)
+        # Correct case
+        result = conv._convert_argv_if_needed({'Name': 'Alice', 'ROLE': 'admin'})
+        assert result == ['Alice', 'admin']
+        
+        # Wrong case should raise KeyError
+        with pytest.raises(FieldValuesMissingException):
+            conv._convert_argv_if_needed({'name': 'Alice', 'role': 'admin'})

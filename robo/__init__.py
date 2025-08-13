@@ -253,9 +253,25 @@ class Conversation(object):
         self.started = False
         if argv is not None:
             self.prestart(argv)
-            self.argv = argv
         else:
             self.argv = []
+    
+    def _convert_argv_if_needed(self, args, strict=True):
+        if type(args) is dict:
+            field_values = []
+            missing_fields = []
+            for k in self.bot.fields:
+                try:
+                    field_values.append(args[k])
+                except KeyError as exc:
+                    field_values.append('<VALUE MISSING>')
+                    missing_fields.append(k)
+            if missing_fields and strict:
+                fieldsmissing = ', '.join(missing_fields)
+                raise FieldValuesMissingException(f"Values missing for fields: [{fieldsmissing}]")
+            return field_values
+        else:
+            return args
     
     @staticmethod
     def _make_text_message(role, content):
@@ -392,8 +408,8 @@ class Conversation(object):
         Args:
             argv (list): Arguments for system prompt template substitution
         """
-        self.argv = argv
-        self.sysprompt = self.bot.sysprompt_vec(argv)
+        self.argv = self._convert_argv_if_needed(argv)
+        self.sysprompt = self.bot.sysprompt_vec(self.argv)
         self.started = True
     
     def start(self, *args):
