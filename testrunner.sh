@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-uv run --with 'anthropic' --with 'pytest' -- pytest -v robo/unittests/__init__.py
+uv run --with 'anthropic' --with 'pytest' --with 'pytest-cov' -- pytest -v --cov=robo robo/unittests/__init__.py

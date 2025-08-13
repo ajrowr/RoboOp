@@ -1,5 +1,8 @@
 import pytest
 import json
+import os
+import asyncio
+import anthropic
 from unittest.mock import Mock, patch
 from robo import Bot, Conversation, MODELS
 from robo.exceptions import *
@@ -748,3 +751,586 @@ class TestEdgeCasesAndErrorHandling:
         # Wrong case should raise KeyError
         with pytest.raises(FieldValuesMissingException):
             conv._convert_argv_if_needed({'name': 'Alice', 'role': 'admin'})
+
+class TestAPIConfiguration:
+    """Test API key and client configuration"""
+    
+    def test_get_api_key_from_file(self):
+        """Test loading API key from file"""
+        import tempfile
+        import os
+        
+        # Create a temporary API key file
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+            f.write('test-api-key-123')
+            temp_file = f.name
+        
+        try:
+            # Mock the API_KEY_FILE setting
+            original_api_key_file = robo.API_KEY_FILE
+            robo.API_KEY_FILE = temp_file
+            
+            api_key = robo._get_api_key()
+            assert api_key == 'test-api-key-123'
+        finally:
+            robo.API_KEY_FILE = original_api_key_file
+            os.unlink(temp_file)
+    
+    def test_get_api_key_from_env_var(self):
+        """Test loading API key from custom environment variable"""
+        with patch.dict(os.environ, {'CUSTOM_API_KEY': 'env-api-key-456'}):
+            original_api_key_file = robo.API_KEY_FILE
+            original_api_key_env = robo.API_KEY_ENV_VAR
+            
+            try:
+                robo.API_KEY_FILE = None
+                robo.API_KEY_ENV_VAR = 'CUSTOM_API_KEY'
+                
+                api_key = robo._get_api_key()
+                assert api_key == 'env-api-key-456'
+            finally:
+                robo.API_KEY_FILE = original_api_key_file
+                robo.API_KEY_ENV_VAR = original_api_key_env
+    
+    def test_get_api_key_default(self):
+        """Test getting API key returns None for default behavior"""
+        original_api_key_file = robo.API_KEY_FILE
+        original_api_key_env = robo.API_KEY_ENV_VAR
+        
+        try:
+            robo.API_KEY_FILE = None
+            robo.API_KEY_ENV_VAR = None
+            
+            api_key = robo._get_api_key()
+            assert api_key is None
+        finally:
+            robo.API_KEY_FILE = original_api_key_file
+            robo.API_KEY_ENV_VAR = original_api_key_env
+    
+    def test_get_client_sync(self):
+        """Test getting synchronous client"""
+        client = robo._get_client(async_mode=False)
+        assert isinstance(client, anthropic.Anthropic)
+    
+    def test_get_client_async(self):
+        """Test getting asynchronous client"""
+        client = robo._get_client(async_mode=True)
+        assert isinstance(client, anthropic.AsyncAnthropic)
+    
+    def test_get_client_class_sync(self):
+        """Test getting sync client class"""
+        client_class = robo._get_client_class(async_mode=False)
+        assert client_class is anthropic.Anthropic
+    
+    def test_get_client_class_async(self):
+        """Test getting async client class"""
+        client_class = robo._get_client_class(async_mode=True)
+        assert client_class is anthropic.AsyncAnthropic
+    
+    def test_bot_with_api_key_sync(self):
+        """Test Bot.with_api_key class method sync"""
+        bot = Bot.with_api_key('test-key-123', async_mode=False)
+        assert isinstance(bot, Bot)
+        assert isinstance(bot.client, anthropic.Anthropic)
+    
+    def test_bot_with_api_key_async(self):
+        """Test Bot.with_api_key class method async"""
+        bot = Bot.with_api_key('test-key-456', async_mode=True)
+        assert isinstance(bot, Bot)
+        assert isinstance(bot.client, anthropic.AsyncAnthropic)
+
+
+class TestCannedResponse:
+    """Test CannedResponse functionality"""
+    
+    def test_canned_response_initialization(self):
+        """Test CannedResponse initialization"""
+        response = robo.CannedResponse("Hello world", include_in_context=True)
+        assert response.text == "Hello world"
+        assert response.include_in_context == True
+        assert len(response.content) == 1
+        assert response.content[0].text == "Hello world"
+    
+    def test_canned_response_default_include_in_context(self):
+        """Test CannedResponse default include_in_context"""
+        response = robo.CannedResponse("Hello world")
+        assert response.include_in_context == True
+    
+    def test_canned_response_exclude_from_context(self):
+        """Test CannedResponse with include_in_context=False"""
+        response = robo.CannedResponse("Hello world", include_in_context=False)
+        assert response.include_in_context == False
+    
+    def test_canned_response_repr(self):
+        """Test CannedResponse __repr__"""
+        response = robo.CannedResponse("Hello world")
+        assert repr(response) == '<CannedResponse: "Hello world">'
+    
+    def test_canned_response_context_manager_sync(self):
+        """Test CannedResponse as synchronous context manager"""
+        response = robo.CannedResponse("Hello world")
+        with response as ctx:
+            assert ctx is response
+    
+    def test_canned_response_context_manager_async(self):
+        """Test CannedResponse as asynchronous context manager"""
+        response = robo.CannedResponse("Hello world")
+        async def get_ctx(response):
+            async with response as ctx:
+                pass
+            return ctx
+        
+        ret = asyncio.run(get_ctx(response))
+        assert ret is response
+        # async with response as ctx:
+        #     assert ctx is response
+    
+    def test_canned_response_text_stream(self):
+        """Test CannedResponse text_stream property"""
+        response = robo.CannedResponse("Hello world")
+        chunks = list(response.text_stream)
+        assert chunks == ["Hello world"]
+
+
+class TestBotHelperMethods:
+    """Test Bot helper methods"""
+    
+    def test_make_sysprompt_segment_without_cache(self):
+        """Test _make_sysprompt_segment without cache control"""
+        result = Bot._make_sysprompt_segment("Test text", set_cache_control=False)
+        expected = {
+            'type': 'text',
+            'text': 'Test text'
+        }
+        assert result == expected
+    
+    def test_make_sysprompt_segment_with_cache(self):
+        """Test _make_sysprompt_segment with cache control"""
+        result = Bot._make_sysprompt_segment("Test text", set_cache_control=True)
+        expected = {
+            'type': 'text',
+            'text': 'Test text',
+            'cache_control': {'type': 'ephemeral'}
+        }
+        assert result == expected
+
+
+class TestConversationStreaming:
+    """Test conversation streaming functionality"""
+    
+    def test_conversation_with_streaming_enabled(self):
+        """Test conversation initialization with streaming enabled"""
+        conv = Conversation(Bot, stream=True)
+        assert conv.is_streaming == True
+    
+    def test_conversation_with_streaming_disabled(self):
+        """Test conversation initialization with streaming disabled"""
+        conv = Conversation(Bot, stream=False)
+        assert conv.is_streaming == False
+    
+    def test_conversation_default_streaming(self):
+        """Test conversation default streaming setting"""
+        conv = Conversation(Bot)
+        assert conv.is_streaming == False
+
+
+class TestConversationAsyncMode:
+    """Test conversation async mode"""
+    
+    def test_conversation_sync_mode(self):
+        """Test conversation in synchronous mode"""
+        conv = Conversation(Bot, async_mode=False)
+        assert conv.is_async == False
+    
+    def test_conversation_async_mode(self):
+        """Test conversation in asynchronous mode"""
+        conv = Conversation(Bot, async_mode=True)
+        assert conv.is_async == True
+    
+    def test_conversation_default_async_mode(self):
+        """Test conversation default async mode"""
+        conv = Conversation(Bot)
+        assert conv.is_async == False
+
+
+class TestLoggedConversation:
+    """Test LoggedConversation functionality"""
+    
+    def test_logged_conversation_with_custom_id(self):
+        """Test LoggedConversation with custom conversation ID"""
+        conv = robo.LoggedConversation(Bot, conversation_id='test-123')
+        assert conv.conversation_id == 'test-123'
+        assert conv.first_saved_at is None
+    
+    def test_logged_conversation_auto_id(self):
+        """Test LoggedConversation with auto-generated ID"""
+        conv = robo.LoggedConversation(Bot)
+        assert conv.conversation_id is not None
+        assert len(conv.conversation_id) > 0
+        # Should be a UUID-like string
+        assert '-' in conv.conversation_id
+    
+    def test_logged_conversation_with_logs_dir(self, tmp_path):
+        """Test LoggedConversation with custom logs directory"""
+        conv = robo.LoggedConversation(Bot, logs_dir=str(tmp_path))
+        assert conv.logs_dir == str(tmp_path)
+    
+    def test_logged_conversation_repr(self):
+        """Test LoggedConversation __repr__"""
+        conv = robo.LoggedConversation(Bot, conversation_id='test-456')
+        expected = '<LoggedConversation with ID test-456>'
+        assert repr(conv) == expected
+    
+    def test_logged_conversation_logfolder_path(self, tmp_path):
+        """Test LoggedConversation _logfolder_path method"""
+        conv = robo.LoggedConversation(Bot, logs_dir=str(tmp_path), conversation_id='test-789')
+        
+        # First call should set first_saved_at
+        path1 = conv._logfolder_path()
+        assert conv.first_saved_at is not None
+        assert 'test-789' in str(path1)
+        
+        # Second call should return same path
+        path2 = conv._logfolder_path()
+        assert path1 == path2
+    
+    def test_logged_conversation_write_log(self, tmp_path):
+        """Test LoggedConversation _write_log method"""
+        conv = robo.LoggedConversation(Bot, logs_dir=str(tmp_path), conversation_id='test-write')
+        conv.prestart([])
+        conv.messages = [{'role': 'user', 'content': [{'type': 'text', 'text': 'Hello'}]}]
+        
+        conv._write_log()
+        
+        # Check that log file was created
+        log_files = list(tmp_path.glob('**/conversation.json'))
+        assert len(log_files) == 1
+        
+        # Check log content
+        with open(log_files[0]) as f:
+            log_data = json.load(f)
+        
+        assert 'when' in log_data
+        assert 'with' in log_data
+        assert 'argv' in log_data
+        assert 'messages' in log_data
+        assert log_data['with'] == 'Bot'
+        assert log_data['argv'] == []
+        assert log_data['messages'] == conv.messages
+    
+    def test_logged_conversation_revive_unknown_id(self, tmp_path):
+        """Test LoggedConversation.revive with unknown conversation ID"""
+        with pytest.raises(robo.UnknownConversationException):
+            robo.LoggedConversation.revive(Bot, 'nonexistent-id', str(tmp_path))
+    
+    def test_logged_conversation_revive_success(self, tmp_path):
+        """Test LoggedConversation.revive with existing conversation"""
+        # Create a logged conversation and save it
+        original_conv = robo.LoggedConversation(Bot, logs_dir=str(tmp_path), conversation_id='revive-test')
+        original_conv.prestart(['test-arg'])
+        original_conv.messages = [
+            {'role': 'user', 'content': [{'type': 'text', 'text': 'Hello'}]},
+            {'role': 'assistant', 'content': [{'type': 'text', 'text': 'Hi there'}]}
+        ]
+        original_conv._write_log()
+        
+        # Revive the conversation
+        revived_conv = robo.LoggedConversation.revive(Bot, 'revive-test', str(tmp_path), argv=['new-arg'])
+        
+        assert revived_conv.conversation_id == 'revive-test'
+        assert revived_conv.messages == original_conv.messages
+        assert revived_conv.argv == ['new-arg']  # New argv should override
+        assert revived_conv.started == True
+
+
+class TestConversationWithFiles:
+    """Test ConversationWithFiles functionality"""
+    
+    def test_conversation_with_files_init(self):
+        """Test ConversationWithFiles initialization"""
+        conv = robo.ConversationWithFiles(Bot)
+        assert isinstance(conv, robo.ConversationWithFiles)
+        assert isinstance(conv, robo.Conversation)
+    
+    def test_make_message_with_images(self, tmp_path):
+        """Test _make_message_with_images method"""
+        # Create a dummy image file
+        image_file = tmp_path / "test.jpg"
+        image_file.write_bytes(b"fake image data")
+        
+        conv = robo.ConversationWithFiles(Bot)
+        message = conv._make_message_with_images(
+            'user', 
+            'What do you see?',
+            [('image/jpeg', str(image_file))]
+        )
+        
+        assert message['role'] == 'user'
+        assert len(message['content']) == 2  # Image + text
+        assert message['content'][0]['type'] == 'image'
+        assert message['content'][1]['type'] == 'text'
+        assert message['content'][1]['text'] == 'What do you see?'
+        assert message['content'][0]['source']['type'] == 'base64'
+        assert message['content'][0]['source']['media_type'] == 'image/jpeg'
+    
+    def test_make_message_with_images_no_text(self, tmp_path):
+        """Test _make_message_with_images with no text message"""
+        image_file = tmp_path / "test.png"
+        image_file.write_bytes(b"fake png data")
+        
+        conv = robo.ConversationWithFiles(Bot)
+        message = conv._make_message_with_images(
+            'user',
+            None,  # No text message
+            [('image/png', str(image_file))]
+        )
+        
+        assert message['role'] == 'user'
+        assert len(message['content']) == 1  # Only image
+        assert message['content'][0]['type'] == 'image'
+
+
+class TestUtilityFunctions:
+    """Test utility functions"""
+    
+    def test_gettext_single_text_block(self):
+        """Test gettext with single text content block"""
+        mock_message = Mock()
+        mock_content = Mock()
+        mock_content.text = "Hello world"
+        mock_message.content = [mock_content]
+        
+        result = robo.gettext(mock_message)
+        assert result == "Hello world"
+    
+    def test_gettext_multiple_text_blocks(self):
+        """Test gettext with multiple text content blocks"""
+        mock_message = Mock()
+        mock_content1 = Mock()
+        mock_content1.text = "Hello "
+        mock_content2 = Mock()
+        mock_content2.text = "world"
+        mock_message.content = [mock_content1, mock_content2]
+        
+        result = robo.gettext(mock_message)
+        assert result == "Hello world"
+    
+    def test_gettext_mixed_content_blocks(self):
+        """Test gettext with mixed content blocks (some without text)"""
+        mock_message = Mock()
+        mock_text_content = Mock()
+        mock_text_content.text = "Hello"
+        mock_other_content = Mock(spec=[])  # No text attribute
+        mock_message.content = [mock_text_content, mock_other_content]
+        
+        result = robo.gettext(mock_message)
+        assert result == "Hello"
+    
+    def test_getjson_valid_json(self):
+        """Test getjson with valid JSON content"""
+        mock_message = Mock()
+        mock_content = Mock()
+        mock_content.text = '{"key": "value", "number": 42}'
+        mock_message.content = [mock_content]
+        
+        result = robo.getjson(mock_message)
+        assert result == {"key": "value", "number": 42}
+    
+    def test_getjson_invalid_json(self):
+        """Test getjson with invalid JSON content"""
+        mock_message = Mock()
+        mock_content = Mock()
+        mock_content.text = "not valid json"
+        mock_message.content = [mock_content]
+        
+        with pytest.raises(json.JSONDecodeError):
+            robo.getjson(mock_message)
+    
+    def test_printmsg(self, capsys):
+        """Test printmsg function"""
+        mock_message = Mock()
+        mock_content = Mock()
+        mock_content.text = "Hello world"
+        mock_message.content = [mock_content]
+        
+        robo.printmsg(mock_message)
+        captured = capsys.readouterr()
+        assert captured.out == "Hello world\n"
+
+
+class TestStreamerFunctions:
+    """Test streamer utility functions"""
+    
+    def test_streamer_with_bot_class(self):
+        """Test streamer function with Bot class"""
+        stream_func = robo.streamer(Bot)
+        assert callable(stream_func)
+    
+    def test_streamer_with_bot_instance(self):
+        """Test streamer function with Bot instance"""
+        bot = Bot()
+        stream_func = robo.streamer(bot)
+        assert callable(stream_func)
+    
+    def test_streamer_with_conversation(self):
+        """Test streamer function with Conversation instance"""
+        conv = Conversation(Bot, stream=True)
+        stream_func = robo.streamer(conv)
+        assert callable(stream_func)
+    
+    def test_streamer_with_cc_parameter(self):
+        """Test streamer function with cc parameter"""
+        from io import StringIO
+        cc = StringIO()
+        stream_func = robo.streamer(Bot, cc=cc)
+        assert callable(stream_func)
+    
+    def test_streamer_async_with_bot_class(self):
+        """Test streamer_async function with Bot class"""
+        stream_func = robo.streamer_async(Bot)
+        assert callable(stream_func)
+        # Check if it's a coroutine function
+        import asyncio
+        assert asyncio.iscoroutinefunction(stream_func)
+    
+    def test_streamer_async_with_conversation(self):
+        """Test streamer_async function with Conversation instance"""
+        conv = Conversation(Bot, stream=True, async_mode=True)
+        stream_func = robo.streamer_async(conv)
+        assert callable(stream_func)
+        import asyncio
+        assert asyncio.iscoroutinefunction(stream_func)
+
+
+class TestToolUseBlocks:
+    """Test tool use block handling"""
+    
+    def test_add_tool_request(self):
+        """Test _add_tool_request method"""
+        conv = Conversation(Bot)
+        request = {
+            'name': 'test_tool',
+            'id': 'tool_123',
+            'input': {'param': 'value'}
+        }
+        
+        conv._add_tool_request(request)
+        assert len(conv.tool_use_blocks.pending) == 1
+        
+        pending_block = conv.tool_use_blocks.pending[0]
+        assert pending_block.name == 'test_tool'
+        assert pending_block.id == 'tool_123'
+        assert pending_block.status == 'PENDING'
+        assert pending_block.response is None
+    
+    def test_handle_pending_tool_requests(self):
+        """Test _handle_pending_tool_requests method"""
+        class TestBot(Bot):
+            def tools_test_tool(self, param=None):
+                return {'target': 'model', 'message': f'Result: {param}'}
+        
+        conv = Conversation(TestBot)
+        request = {
+            'name': 'test_tool',
+            'id': 'tool_123',
+            'input': {'param': 'test_value'}
+        }
+        
+        conv._add_tool_request(request)
+        conv._handle_pending_tool_requests()
+        
+        pending_block = conv.tool_use_blocks.pending[0]
+        assert pending_block.status == 'READY'
+        assert pending_block.response == {'target': 'model', 'message': 'Result: test_value'}
+    
+    def test_handle_waiting_tool_requests_no_waiting(self):
+        """Test _handle_waiting_tool_requests with no waiting requests"""
+        conv = Conversation(Bot)
+        result = conv._handle_waiting_tool_requests()
+        assert result is None
+    
+    def test_handle_waiting_tool_requests_with_waiting(self):
+        """Test _handle_waiting_tool_requests with waiting requests"""
+        from types import SimpleNamespace
+        conv = Conversation(Bot)
+        
+        # Add a waiting tool request
+        waiting_block = SimpleNamespace(
+            status='WAITING',
+            response={'message': 'Please wait'}
+        )
+        conv.tool_use_blocks.pending.append(waiting_block)
+        
+        result = conv._handle_waiting_tool_requests()
+        assert result == 'Please wait'
+    
+    def test_compile_tool_responses(self):
+        """Test _compile_tool_responses method"""
+        from types import SimpleNamespace
+        conv = Conversation(Bot)
+        
+        # Add ready tool blocks
+        ready_block1 = SimpleNamespace(
+            status='READY',
+            id='tool_1',
+            response={'message': 'Response 1'}
+        )
+        ready_block2 = SimpleNamespace(
+            status='READY', 
+            id='tool_2',
+            response={'message': 'Response 2'}
+        )
+        conv.tool_use_blocks.pending.extend([ready_block1, ready_block2])
+        
+        result = conv._compile_tool_responses()
+        
+        assert result['role'] == 'user'
+        assert len(result['content']) == 2
+        assert result['content'][0]['type'] == 'tool_result'
+        assert result['content'][0]['tool_use_id'] == 'tool_1'
+        assert result['content'][0]['content'] == 'Response 1'
+        assert result['content'][1]['tool_use_id'] == 'tool_2'
+        assert result['content'][1]['content'] == 'Response 2'
+        
+        # Check that blocks were moved to resolved
+        assert len(conv.tool_use_blocks.pending) == 0
+        assert len(conv.tool_use_blocks.resolved) == 2
+    
+    def test_get_last_tool_use_id(self):
+        """Test _get_last_tool_use_id method"""
+        conv = Conversation(Bot)
+        conv.messages = [
+            {
+                'role': 'assistant',
+                'content': [
+                    {'type': 'text', 'text': 'I need to use a tool'},
+                    {'type': 'tool_use', 'id': 'tool_123', 'name': 'test', 'input': {}}
+                ]
+            }
+        ]
+        
+        result = conv._get_last_tool_use_id()
+        assert result == 'tool_123'
+    
+    def test_get_last_tool_use_id_no_tools(self):
+        """Test _get_last_tool_use_id with no tool use"""
+        conv = Conversation(Bot)
+        conv.messages = [
+            {
+                'role': 'assistant',
+                'content': [{'type': 'text', 'text': 'Just text'}]
+            }
+        ]
+        
+        result = conv._get_last_tool_use_id()
+        assert result is None
+
+
+class TestBotSyspromptNotImplementedError:
+    """Test Bot sysprompt_generate NotImplementedError"""
+    
+    def test_sysprompt_generate_not_implemented(self):
+        """Test that calling sysprompt_generate raises NotImplementedError"""
+        bot = Bot()
+        with pytest.raises(NotImplementedError, match="This method is not implemented"):
+            bot.sysprompt_generate()

@@ -31,7 +31,7 @@ def _get_client_class(async_mode=False):
     return anthropic.Anthropic
 
 def _get_client(async_mode=False):
-    return _get_client_class()(api_key=_get_api_key())
+    return _get_client_class(async_mode=async_mode)(api_key=_get_api_key())
 
 
 class Bot(object):
