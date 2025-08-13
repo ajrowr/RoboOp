@@ -61,6 +61,18 @@ For convenience, the `robo` package includes a function called `streamer` which 
 
 This also allows passing in of values for fields, as demonstrated in the "Fields" section below. Alternatively to passing a `Bot` class as first argument, you can also pass `streamer` an _instance_ of a `Bot` class; or an instance of a `Conversation` class (in which case, make sure that it's been instanciated with `stream=True`).
 
+`streamer` can also optionally be passed a file-like object via keyword argument `cc`, in which case it writes the incoming chunks of the streaming response to the file-like object as well as printing them:
+
+```python
+>>> from io import StringIO
+>>> sio = StringIO()
+>>> say = streamer(Bot, cc=sio)
+>>> say("What colour is the sky?")
+The sky appears blue during the day. This is because molecules in Earth's atmosphere scatter blue light from the sun more than other colors. However, the sky can appear different colors at different times - like red, orange, pink, or purple during sunrise and sunset, or gray when it's cloudy.
+>>> sio.tell()
+293
+```
+
 While streaming generally gives the best user experience for conversational applications, it can (absent `streamer`) be a bit more technical to work with so the default is "flat" mode, in which the fully-generated message is returned as an `anthropic.types.message.Message` object passed directly through from the underlying Anthropic API. This object contains additional info that may be useful for debugging. You can print the text content from this object easily with `printmsg`:
 
 ```python
@@ -449,6 +461,6 @@ Note also the return structure:
 }
 ```
 
-While generally the output of a tool call is used by the model to inform the production of a response, for some use cases you might want use a tool call to send something to the client instead. For example if your application is a web-integrated chatbot, some tool calls may be intended to trigger functionality in the web application. We'll dig into this more in a future section, but for now, what you need to know is that if you want the model to receive the output of the tool call then set `target` to `'model'` and the output will automatically be routed correctly.
+While generally the output of a tool call is used by the model to inform the production of a response, for some use cases you might want to use a tool call to send something to the client instead. For example if your application is a web-integrated chatbot, some tool calls may be intended to trigger functionality in the web application. We'll dig into this more in a future section, but for now, what you need to know is that if you want the model to receive the output of the tool call then set `target` to `'model'` and the output will automatically be routed correctly.
 
 # More to come, watch this space! :)

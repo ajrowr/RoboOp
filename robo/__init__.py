@@ -804,12 +804,14 @@ class ConversationWithFiles(Conversation):
         return message_out
 
 
-def streamer(bot_or_conversation, args=[]):
+def streamer(bot_or_conversation, args=[], cc=None):
     """Create a streaming conversation function for real-time output.
     
     Args:
         bot_or_conversation: Either a Bot instance/class or a Conversation with stream=True
         args (list): Template arguments for system prompt
+        cc (file-like object): If provided, write the response text to the object (using obj.write())
+            as well as printing it.
         
     Returns:
         function: A function that takes a message and streams the response to stdout
@@ -825,6 +827,8 @@ def streamer(bot_or_conversation, args=[]):
         with convo.resume(message) as stream:
             for chunk in stream.text_stream:
                 print(chunk, end="", flush=True)
+                if cc:
+                    cc.write(chunk)
         print()
     return streamit
 
