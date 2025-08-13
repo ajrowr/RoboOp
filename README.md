@@ -1,4 +1,4 @@
-Just a simple microframework designed to get you up and running quickly with the Anthropic API.
+A straightforward microframework optimised for getting you up and running quickly building Claude-powered conversational interfaces, AI assistants and LLM applications with the Anthropic API.
 
 ```python
 >>> from robo import Bot, streamer

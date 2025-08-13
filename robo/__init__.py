@@ -243,7 +243,7 @@ class Conversation(object):
         self.message_objects = []
         self.cache_user_prompt = cache_user_prompt
         self.tool_use_blocks = SimpleNamespace(pending=[], resolved=[])
-        if soft_start or (self.bot.soft_start and not soft_start is False):
+        if (soft_start or (self.bot.soft_start and not soft_start is False)) and self.bot.welcome_message:
             self.messages.append(self._make_text_message('assistant', self.bot.welcome_message))
             self.message_objects.append(None)
             self.soft_started = True

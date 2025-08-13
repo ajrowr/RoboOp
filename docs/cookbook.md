@@ -68,7 +68,9 @@ This also allows passing in of values for fields, as demonstrated in the "Fields
 >>> sio = StringIO()
 >>> say = streamer(Bot, cc=sio)
 >>> say("What colour is the sky?")
-The sky appears blue during the day. This is because molecules in Earth's atmosphere scatter blue light from the sun more than other colors. However, the sky can appear different colors at different times - like red, orange, pink, or purple during sunrise and sunset, or gray when it's cloudy.
+The sky appears blue during the day. This is because molecules in Earth's atmosphere scatter blue 
+light from the sun more than other colors. However, the sky can appear different colors at different 
+times - like red, orange, pink, or purple during sunrise and sunset, or gray when it's cloudy.
 >>> sio.tell()
 293
 ```

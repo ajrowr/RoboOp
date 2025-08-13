@@ -33,6 +33,7 @@ class StreamWrapper:
             self.events.append(event)
             yield event
 
+
 class StreamWrapperWithToolUse(StreamWrapper):
     @property
     def text_stream(self):
@@ -81,6 +82,7 @@ class StreamWrapperWithToolUse(StreamWrapper):
                         yield from substream.text_stream
                 
         yield from exhaust_events(self.conversation_obj)
+
 
 class AsyncStreamWrapper:
     def __init__(self, stream, conversation_obj):
@@ -170,7 +172,6 @@ class AsyncStreamWrapperWithToolUse(AsyncStreamWrapper):
                 
         async for chunk in exhaust_events(self.conversation_obj):
             yield chunk
-
 
 
 __all__ = ['StreamWrapper', 'AsyncStreamWrapper', 'StreamWrapperWithToolUse', \
