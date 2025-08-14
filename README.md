@@ -72,13 +72,20 @@ convo.resume("Aww, you just want some scritches don't you? Scritchy scritchy scr
 ... # Message object
 ```
 
-Notice that `start()` will accept a message as the first and only argument, OR a vector of variables for interpolation in the sysprompt as the first argument and _then_ the message as second arg. This is a deliberate decision for convenience but if you don't like it then you can use `convo.prestart(interpolation_variables)` followed by `convo.resume(message)` to initiate things more "formally". Or you can do like this:
+Notice that `start()` will accept a message as the first and only argument, OR a vector or mapping of variables for interpolation in the sysprompt as the first argument and _then_ the message as second arg. This is a deliberate decision for convenience but if you don't like it then you can use `convo.prestart(interpolation_variables)` followed by `convo.resume(message)` to initiate things more "formally". Or you can do like this:
 
 ```python
 convo = Conversation(Animal, ['shih tzu'])
 convo.resume("Hey little buddy!")
 ```
 
+Alternatively:
+```python
+convo = Conversation(Animal, {'ANIMAL_TYPE': 'golden retriever'})
+convo.resume("Here boy!")
+```
+
 These examples all assume you've got your Anthropic API key defined via environment variable `ANTHROPIC_API_KEY` . If you need to do something different then you can instanciate the bot like `Animal.with_api_key(your_api_key)` instead (as `Conversation` will accept either a class or an instance in its constructor). Alternatively you can set `robo.API_KEY_FILE` (to load the key from a file) or `robo.API_KEY_ENV_VAR` (to nominate a different env var) sometime before creating your `Conversation` instance.
 
 These examples barely scratch the surface of what's possible with RoboOp. Check out [docs/cookbook.md](docs/cookbook.md) for more!
+

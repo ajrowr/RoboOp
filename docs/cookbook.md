@@ -519,7 +519,7 @@ viewers for centuries. Currently housed in the Louvre Museum in Paris, it's cons
 most famous paintings in the world and a masterpiece of Renaissance art.
 ```
 
-When retrieving a file from the Web, the retrieval result will generally include the file's MIME type. For example, using `requests` (and showing how to stream without using `streamer`):
+When retrieving a file from the Web, the retrieval result will generally include the file's MIME type. For example, using `requests` (and demonstrating how to stream without using `streamer`):
 
 ```python
 >>> import requests
@@ -539,13 +539,13 @@ contexts.
 **Key Content:**
 - **Main Topic**: The use of placeholder names like "John Doe," "Jane Doe," and "Jane Roe"
 - **Usage**: These names are used when someone's true identity is unknown or must be withheld in 
-legal proceedings, or to refer to unidentified corpses or hospital patients
+  legal proceedings, or to refer to unidentified corpses or hospital patients
 - **Geographic Usage**: Primarily used in the United States and Canada; other English-speaking 
-countries like the UK, Australia, and New Zealand prefer names like "Joe Bloggs" or "John Smith"
+  countries like the UK, Australia, and New Zealand prefer names like "Joe Bloggs" or "John Smith"
 - **Cultural References**: The document mentions usage in popular culture, including the Frank Capra 
-film "Meet John Doe" and a 2002 TV series
+  film "Meet John Doe" and a 2002 TV series
 - **Variations**: Discusses related terms like "Baby Doe," "Precious Doe," and numbering systems 
-for multiple anonymous parties (John Doe #1, #2, etc.)
+  for multiple anonymous parties (John Doe #1, #2, etc.)
 
 **Document Details:**
 - Contains both text and a landscape image
@@ -554,9 +554,10 @@ for multiple anonymous parties (John Doe #1, #2, etc.)
 - Includes Creative Commons licensing information at the bottom
 
 The document appears to be designed primarily for testing PDF functionality while providing 
-informative content about legal naming conventions.>>> 
+informative content about legal naming conventions.
+>>> 
 ```
 
-Note that in some cases, this may not be reliable due to variations in how web servers are configured. For example, requests for PDFs hosted on Github.com may come back with a `content-type` of `application/octet-stream` which is just a fancy way of saying "this is a bunch of bytes". Unfortunately the Claude API can't work with that and will return a `BadRequestError` - so your mileage may vary.
+Note that in some cases, inferring the MIME type from the response may not be reliable due to variations in how web servers are configured. For example, requests for PDFs hosted on Github.com may come back with a `content-type` of `application/octet-stream` (which is just a fancy way of saying "this is a bunch of bytes"). Unfortunately that's not enough for the Claude API to work with and it will return a `BadRequestError` - so your mileage may vary.
 
 # More to come, watch this space! :)
