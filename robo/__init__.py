@@ -18,6 +18,15 @@ API_KEY_ENV_VAR = None ## If you want to use a different env var instead of ANTH
 STREAM_WRAPPER_CLASS_SYNC = StreamWrapperWithToolUse
 STREAM_WRAPPER_CLASS_ASYNC = AsyncStreamWrapperWithToolUse
 
+MEDIA_TYPE_MAP = {
+    '.jpg': ('image/jpeg', 'image'),
+    '.jpeg': ('image/jpeg', 'image'),
+    '.png': ('image/png', 'image'),
+    '.webp': ('image/webp', 'image'),
+    '.txt': ('text/plain', 'document'),
+    '.pdf': ('application/pdf', 'document'),
+}
+
 def _get_api_key():
     if API_KEY_FILE:
         return open(API_KEY_FILE).read()
@@ -273,15 +282,59 @@ class Conversation(object):
         else:
             return args
     
+    @classmethod
+    def _make_text_message(klass, role, content):
+        return klass._make_generic_message(
+            role, 
+            [klass._make_message_text_segment(content)]
+        )
+    
     @staticmethod
-    def _make_text_message(role, content):
+    def _make_generic_message(role, content):
         return {
             'role': role,
-            'content': [{
-                'type': 'text',
-                'text': content
-            }]
+            'content': content
         }
+    
+    @staticmethod
+    def _make_message_text_segment(content):
+        return {
+            'type': 'text',
+            'text': content
+        }
+    
+    @staticmethod
+    def _make_message_file_segment(filespec):
+        """filespec is (mimetype, filething, blocktype)
+        filething can be a filepath or a file-like object.
+        """
+        """blocktype (per Claude API) is one of image, document, container_upload"""
+        import base64
+        mimetype, filething, blocktype = filespec
+        if hasattr(filething, 'read') and callable(filething.read):
+            filedat = filething.read()
+        else:
+            with open(filething, 'rb') as inputfile:
+                filedat = inputfile.read()
+            
+        return {
+            'type': blocktype,
+            'source': {
+                'type': 'base64',
+                'media_type': mimetype,
+                'data': base64.b64encode(filedat).decode('utf-8')
+            }
+        }
+    
+    @staticmethod
+    def _infer_filespec_from_filename(filepath):
+        p = Path(filepath)
+        suffix = p.suffix.lower()
+        try:
+            media_type, blocktype = MEDIA_TYPE_MAP[suffix]
+        except KeyError as exc:
+            raise Exception(f"Unrecognised media type suffix: {suffix}") from exc
+        return (media_type, filepath, blocktype)
     
     @staticmethod
     def _make_tool_result_message(toolblock, toolresult):
@@ -460,7 +513,7 @@ class Conversation(object):
         self.prestart(argv)
         return await self.aresume(message)
 
-    async def aresume(self, message):
+    async def aresume(self, message, with_files=[]):
         """Continue the conversation asynchronously with a new message.
         
         Args:
@@ -479,9 +532,9 @@ class Conversation(object):
             return self._handle_canned_response(message, canned_response)
         
         if self.is_streaming:
-            return await self._aresume_stream(message, is_tool_message=is_tool_message)
+            return await self._aresume_stream(message, is_tool_message=is_tool_message, with_files=with_files)
         else:
-            return await self._aresume_flat(message, is_tool_message=is_tool_message)
+            return await self._aresume_flat(message, is_tool_message=is_tool_message, with_files=with_files)
 
     def _handle_canned_response(self, original_message, canned_response):
         """Handle canned responses (works for both sync and async). If original_message
@@ -506,11 +559,11 @@ class Conversation(object):
         
         return response_obj
 
-    async def _aresume_stream(self, message, is_tool_message=False):
+    async def _aresume_stream(self, message, is_tool_message=False, with_files=[]):
         if is_tool_message:
             self.messages.append(message)
         else:
-            self.messages.append(self._make_text_message('user', message))
+            self.messages.append(self._compile_user_message(message, with_files=with_files))
         stream = self.bot.client.messages.stream(
             model=self.bot.model, max_tokens=self.max_tokens,
             temperature=self.bot.temperature, system=self.sysprompt,
@@ -519,11 +572,11 @@ class Conversation(object):
         )
         return STREAM_WRAPPER_CLASS_ASYNC(stream, self)
 
-    async def _aresume_flat(self, message, is_tool_message=False):
+    async def _aresume_flat(self, message, is_tool_message=False, with_files=[]):
         if is_tool_message:
             self.messages.append(message)
         else:
-            self.messages.append(self._make_text_message('user', message))
+            self.messages.append(self._compile_user_message(message, with_files=with_files))
     
         message_out = await self.bot.client.messages.create(
             model=self.bot.model, max_tokens=self.max_tokens,
@@ -576,7 +629,7 @@ class Conversation(object):
     
         return message_out
     
-    def resume(self, message):
+    def resume(self, message, with_files=[]):
         """Continue the conversation with a new message.
         
         Args:
@@ -595,15 +648,32 @@ class Conversation(object):
             return self._handle_canned_response(message, canned_response)
         
         if self.is_streaming:
-            return self._resume_stream(message, is_tool_message=is_tool_message)
+            return self._resume_stream(message, is_tool_message=is_tool_message, with_files=with_files)
         else:
-            return self._resume_flat(message, is_tool_message=is_tool_message)
+            return self._resume_flat(message, is_tool_message=is_tool_message, with_files=with_files)
 
-    def _resume_stream(self, message, is_tool_message=False):
+    @classmethod
+    def _compile_user_message(klass, message, with_files=[]):
+        if with_files:
+            message_blocks = []
+            for fspec in with_files:
+                if type(fspec) is not tuple:
+                    fspec = klass._infer_filespec_from_filename(fspec)
+                message_blocks.append(
+                    klass._make_message_file_segment(fspec)
+                )
+            message_blocks.append(klass._make_message_text_segment(message))
+            message_out = klass._make_generic_message('user', message_blocks)
+        else:
+            message_out = klass._make_text_message('user', message)
+        return message_out
+
+    def _resume_stream(self, message, is_tool_message=False, with_files=[]):
         if is_tool_message:
             self.messages.append(message)
         else:
-            self.messages.append(self._make_text_message('user', message))
+            self.messages.append(self._compile_user_message(message, with_files=with_files))
+        
         stream = self.bot.client.messages.stream(
             model=self.bot.model, max_tokens=self.max_tokens,
             temperature=self.bot.temperature, system=self.sysprompt,
@@ -612,11 +682,11 @@ class Conversation(object):
         )
         return STREAM_WRAPPER_CLASS_SYNC(stream, self)
 
-    def _resume_flat(self, message, is_tool_message=False):
+    def _resume_flat(self, message, is_tool_message=False, with_files=[]):
         if is_tool_message:
             self.messages.append(message)
         else:
-            self.messages.append(self._make_text_message('user', message))
+            self.messages.append(self._compile_user_message(message, with_files=with_files))
     
         message_out = self.bot.client.messages.create(
             model=self.bot.model, max_tokens=self.max_tokens,
@@ -837,10 +907,10 @@ def streamer(bot_or_conversation, args=[], cc=None):
         convo = bot_or_conversation
     else: ## in which case it should be either a bot instance or Bot class
         convo = Conversation(bot_or_conversation, stream=True)
-    def streamit(message):
+    def streamit(message, with_files=[]):
         if not convo.started:
             convo.prestart(args)
-        with convo.resume(message) as stream:
+        with convo.resume(message, with_files=with_files) as stream:
             for chunk in stream.text_stream:
                 print(chunk, end="", flush=True)
                 if cc:
@@ -862,10 +932,10 @@ def streamer_async(bot_or_conversation, args=[]):
         convo = bot_or_conversation
     else:
         convo = Conversation(bot_or_conversation, stream=True, async_mode=True)
-    async def streamit(message):
+    async def streamit(message, with_files=[]):
         if not convo.started:
             convo.prestart(args)
-        async with await convo.aresume(message) as stream:
+        async with await convo.aresume(message, with_files=with_files) as stream:
             async for chunk in stream.text_stream:
                 print(chunk, end="", flush=True)
     return streamit
