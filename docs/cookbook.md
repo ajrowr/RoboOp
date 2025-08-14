@@ -468,4 +468,58 @@ Note also the return structure:
 
 While generally the output of a tool call is used by the model to inform the production of a response, for some use cases you might want to use a tool call to send something to the client instead. For example if your application is a web-integrated chatbot, some tool calls may be intended to trigger functionality in the web application. We'll dig into this more in a future section, but for now, what you need to know is that if you want the model to receive the output of the tool call then set `target` to `'model'` and the output will automatically be routed correctly.
 
+## File handling
+
+There are many scenarios in which it is useful to include files alongside your textual prompts. RoboOp makes this straightforward with flexible handling of both files and raw file data.
+
+From a local file:
+```python
+>>> say = streamer(Bot)
+>>> say("describe this image.", with_files=['/path/to/sunflower_with_sky_backdrop.jpg'])
+This image shows a beautiful, vibrant sunflower in full bloom against a brilliant blue sky. The 
+sunflower displays the classic characteristics of its species - bright golden-yellow petals 
+radiating outward from a large, circular center. The center has a distinctive pattern with a 
+green core surrounded by a ring of orange-brown disc florets that create a textured, almost 
+honeycomb-like appearance.
+
+The sunflower is photographed from a low angle, making it appear majestic and prominent against 
+the deep blue sky with some wispy white clouds visible in the background. The flower head is 
+quite large and full, with numerous long, pointed petals that appear to be basking in bright 
+sunlight.
+
+The plant's characteristic large, broad, serrated green leaves are visible along the thick stem, 
+showing the typical heart-shaped form of sunflower foliage. The contrast between the warm yellows 
+and oranges of the flower, the rich green of the leaves, and the cool blue of the sky creates a 
+striking and cheerful composition that captures the essence of a perfect summer day.
+>>> 
+```
+
+From a file-like object:
+```python
+>>> say = streamer(Bot)
+>>> with open('/path/to/mona-lisa.jpg', 'rb') as la_gioconda:
+...   say("Please describe this image.", with_files=[('image/jpeg', la_gioconda, 'image')])
+... 
+This is the famous painting "Mona Lisa" (also known as "La Gioconda") by Leonardo da Vinci, created between 1503-1519. The painting depicts a woman with an enigmatic smile, seated in three-quarter view against a mysterious landscape background. She has long, dark hair and is wearing dark clothing typical of early 16th-century fashion. Her hands are folded and positioned in the foreground, while behind her stretches an atmospheric landscape with winding paths, bridges, and distant mountains rendered in sfumato - da Vinci's signature technique of soft, hazy transitions between colors and tones. The painting is renowned for the subject's direct gaze and subtle smile, which has captivated viewers for centuries. Currently housed in the Louvre Museum in Paris, it's considered one of the most famous paintings in the world and a masterpiece of Renaissance art.
+```
+
+Using raw `bytes` data from a web request:
+
+```python
+>>> import requests
+>>> resp = requests.get('https://upload.wikimedia.org/wikipedia/commons/f/fb/' + \
+                         'Pac-Man_ingame_and_2D_alternative_design.png')
+>>> say = streamer(Bot)
+>>> say("describe this image.", with_files=[('image/png', resp.content, 'image')])
+This image shows Pac-Man, the iconic yellow video game character, alongside what appears to be a 
+pixelated yellow pellet or dot (the kind Pac-Man typically eats in the game). Pac-Man is depicted 
+in a more detailed, cartoon-like style with arms, legs, and red shoes, showing him in an animated, 
+happy pose with his mouth open in his characteristic eating position. This appears to be artwork 
+related to the classic arcade game Pac-Man, combining the simple pixelated game element with a 
+more expressive character design.
+```
+
+Explanations to come!
+
 # More to come, watch this space! :)
+[[ streaming responses without streamer ]]
