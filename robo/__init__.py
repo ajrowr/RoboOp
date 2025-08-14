@@ -664,7 +664,8 @@ class Conversation(object):
                 message_blocks.append(
                     klass._make_message_file_segment(fspec)
                 )
-            message_blocks.append(klass._make_message_text_segment(message))
+            if message: ## Allow for messages consisting only of files
+                message_blocks.append(klass._make_message_text_segment(message))
             message_out = klass._make_generic_message('user', message_blocks)
         else:
             message_out = klass._make_text_message('user', message)
@@ -837,59 +838,6 @@ class LoggedConversation(Conversation):
         revenant.messages = logdata['messages']
         revenant.prestart(argv)
         return revenant
-
-
-class ConversationWithFiles(Conversation):
-    """Experimental conversation class that supports file attachments.
-    
-    Extends Conversation to handle image and file uploads alongside text messages.
-    Currently supports image files and has limitations around tool use and async operation.
-    """
-    """This is experimental and needs work. Currently no async and no streaming. 
-    Right now to use it you need to bypass resume() like:
-        c = robo.ConversationWithFiles(Classifier, [])
-        withjpeg = lambda fpath: c._resume_flat(None, [('image/jpeg', fpath)])
-        withpng = lambda fpath: c._resume_flat(None, [('image/png', fpath)])
-    DOES NOT CURRENTLY SUPPORT TOOL USE
-    """
-    
-    def _make_message_with_images(self, role, message, filespecs=[]):
-        import base64
-        content = []
-        for ctype, fpath in filespecs:
-            with open(fpath, 'rb') as inputfile:
-                content.append({
-                    'type': 'image',
-                    'source': {
-                        'type': 'base64',
-                        'media_type': ctype,
-                        'data': base64.b64encode(inputfile.read()).decode('utf-8')
-                    }
-                })
-        if message:
-            content.append({'type': 'text', 'text': message})
-        return {'role': role, 'content': content}
-        
-    def _resume_flat(self, message, filespecs=[]):
-        """filespecs are (content_type, filepath)"""
-        # Check if the bot wants to preprocess the response
-        canned_response = self.bot.preprocess_response(message, self) if message else None
-        if canned_response is not None:
-            return self._handle_canned_response(message, canned_response)
-        
-        if filespecs:
-            self.messages.append(self._make_message_with_images('user', message, filespecs))
-        else:
-            self.messages.append(self._make_text_message('user', message))
-        ## rest is the same
-        message_out = self.bot.client.messages.create(
-            model=self.bot.model, max_tokens=self.max_tokens,
-            temperature=self.bot.temperature, system=self.sysprompt,
-            messages=self._get_conversation_context()
-        )
-        self.message_objects.append(message_out)
-        self.messages.append(self._make_text_message('assistant', message_out.content[0].text))
-        return message_out
 
 
 def streamer(bot_or_conversation, args=[], cc=None):
