@@ -311,7 +311,9 @@ class Conversation(object):
         """blocktype (per Claude API) is one of image, document, container_upload"""
         import base64
         mimetype, filething, blocktype = filespec
-        if hasattr(filething, 'read') and callable(filething.read):
+        if type(filething) is bytes:
+            filedat = filething
+        elif hasattr(filething, 'read') and callable(filething.read):
             filedat = filething.read()
         else:
             with open(filething, 'rb') as inputfile:

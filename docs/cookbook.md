@@ -510,7 +510,7 @@ Using raw `bytes` data from a web request:
 >>> resp = requests.get('https://upload.wikimedia.org/wikipedia/commons/f/fb/' + \
                          'Pac-Man_ingame_and_2D_alternative_design.png')
 >>> say = streamer(Bot)
->>> say("describe this image.", with_files=[('image/png', resp.content, 'image')])
+>>> say("describe this image.", with_files=[(resp.headers['content-type'], resp.content, 'image')])
 This image shows Pac-Man, the iconic yellow video game character, alongside what appears to be a 
 pixelated yellow pellet or dot (the kind Pac-Man typically eats in the game). Pac-Man is depicted 
 in a more detailed, cartoon-like style with arms, legs, and red shoes, showing him in an animated, 
@@ -522,4 +522,3 @@ more expressive character design.
 Explanations to come!
 
 # More to come, watch this space! :)
-[[ streaming responses without streamer ]]
