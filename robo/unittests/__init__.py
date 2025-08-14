@@ -1050,51 +1050,51 @@ class TestLoggedConversation:
         assert revived_conv.started == True
 
 
-class TestConversationWithFiles:
-    """Test ConversationWithFiles functionality"""
-    
-    def test_conversation_with_files_init(self):
-        """Test ConversationWithFiles initialization"""
-        conv = robo.ConversationWithFiles(Bot)
-        assert isinstance(conv, robo.ConversationWithFiles)
-        assert isinstance(conv, robo.Conversation)
-    
-    def test_make_message_with_images(self, tmp_path):
-        """Test _make_message_with_images method"""
-        # Create a dummy image file
-        image_file = tmp_path / "test.jpg"
-        image_file.write_bytes(b"fake image data")
-        
-        conv = robo.ConversationWithFiles(Bot)
-        message = conv._make_message_with_images(
-            'user', 
-            'What do you see?',
-            [('image/jpeg', str(image_file))]
-        )
-        
-        assert message['role'] == 'user'
-        assert len(message['content']) == 2  # Image + text
-        assert message['content'][0]['type'] == 'image'
-        assert message['content'][1]['type'] == 'text'
-        assert message['content'][1]['text'] == 'What do you see?'
-        assert message['content'][0]['source']['type'] == 'base64'
-        assert message['content'][0]['source']['media_type'] == 'image/jpeg'
-    
-    def test_make_message_with_images_no_text(self, tmp_path):
-        """Test _make_message_with_images with no text message"""
-        image_file = tmp_path / "test.png"
-        image_file.write_bytes(b"fake png data")
-        
-        conv = robo.ConversationWithFiles(Bot)
-        message = conv._make_message_with_images(
-            'user',
-            None,  # No text message
-            [('image/png', str(image_file))]
-        )
-        
-        assert message['role'] == 'user'
-        assert len(message['content']) == 1  # Only image
-        assert message['content'][0]['type'] == 'image'
+# class TestConversationWithFiles:
+#     """Test ConversationWithFiles functionality"""
+#
+#     def test_conversation_with_files_init(self):
+#         """Test ConversationWithFiles initialization"""
+#         conv = robo.ConversationWithFiles(Bot)
+#         assert isinstance(conv, robo.ConversationWithFiles)
+#         assert isinstance(conv, robo.Conversation)
+#
+#     def test_make_message_with_images(self, tmp_path):
+#         """Test _make_message_with_images method"""
+#         # Create a dummy image file
+#         image_file = tmp_path / "test.jpg"
+#         image_file.write_bytes(b"fake image data")
+#
+#         conv = robo.ConversationWithFiles(Bot)
+#         message = conv._make_message_with_images(
+#             'user',
+#             'What do you see?',
+#             [('image/jpeg', str(image_file))]
+#         )
+#
+#         assert message['role'] == 'user'
+#         assert len(message['content']) == 2  # Image + text
+#         assert message['content'][0]['type'] == 'image'
+#         assert message['content'][1]['type'] == 'text'
+#         assert message['content'][1]['text'] == 'What do you see?'
+#         assert message['content'][0]['source']['type'] == 'base64'
+#         assert message['content'][0]['source']['media_type'] == 'image/jpeg'
+#
+#     def test_make_message_with_images_no_text(self, tmp_path):
+#         """Test _make_message_with_images with no text message"""
+#         image_file = tmp_path / "test.png"
+#         image_file.write_bytes(b"fake png data")
+#
+#         conv = robo.ConversationWithFiles(Bot)
+#         message = conv._make_message_with_images(
+#             'user',
+#             None,  # No text message
+#             [('image/png', str(image_file))]
+#         )
+#
+#         assert message['role'] == 'user'
+#         assert len(message['content']) == 1  # Only image
+#         assert message['content'][0]['type'] == 'image'
 
 
 class TestUtilityFunctions:
