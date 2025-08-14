@@ -494,31 +494,69 @@ striking and cheerful composition that captures the essence of a perfect summer 
 >>> 
 ```
 
-From a file-like object:
+Besides the raw data of the file, the Claude API needs to know the MIME type of the file and the type of content block it will be enclosed in. Valid container types are `document`, `image`, and `container_upload`.
+In the example above, the file is referenced as a path on the local system, in which case RoboOp will attempt to infer the MIME type and container type from the file's extension.
+
+For finer-grained control, you can refer to the file in what we call "filespec" form, which is a three-tuple of `(mimetype, file_bytes_object_or_path, content_block_type)`. `file_bytes_object_or_path` can be any of:
+- Raw `bytes`
+- A file-like object (specifically, something with a `read()` method)
+- A path to the file (either in `string` form or a `Path` object).
+
+From a file-like object (and using `Conversation.resume()` instead of `streamer`):
 ```python
->>> say = streamer(Bot)
+>>> conv = Conversation(Bot, [])
 >>> with open('/path/to/mona-lisa.jpg', 'rb') as la_gioconda:
-...   say("Please describe this image.", with_files=[('image/jpeg', la_gioconda, 'image')])
+...   printmsg(conv.resume("Please describe this image.", with_files=[('image/jpeg', la_gioconda, 'image')]))
 ... 
-This is the famous painting "Mona Lisa" (also known as "La Gioconda") by Leonardo da Vinci, created between 1503-1519. The painting depicts a woman with an enigmatic smile, seated in three-quarter view against a mysterious landscape background. She has long, dark hair and is wearing dark clothing typical of early 16th-century fashion. Her hands are folded and positioned in the foreground, while behind her stretches an atmospheric landscape with winding paths, bridges, and distant mountains rendered in sfumato - da Vinci's signature technique of soft, hazy transitions between colors and tones. The painting is renowned for the subject's direct gaze and subtle smile, which has captivated viewers for centuries. Currently housed in the Louvre Museum in Paris, it's considered one of the most famous paintings in the world and a masterpiece of Renaissance art.
+This is the famous painting "Mona Lisa" (also known as "La Gioconda") by Leonardo da Vinci, created 
+between 1503-1519. The painting depicts a woman with an enigmatic smile, seated in three-quarter 
+view against a mysterious landscape background. She has long, dark hair and is wearing dark clothing 
+typical of early 16th-century fashion. Her hands are folded and positioned in the foreground, while 
+behind her stretches an atmospheric landscape with winding paths, bridges, and distant mountains 
+rendered in sfumato - da Vinci's signature technique of soft, hazy transitions between colors and 
+tones. The painting is renowned for the subject's direct gaze and subtle smile, which has captivated 
+viewers for centuries. Currently housed in the Louvre Museum in Paris, it's considered one of the 
+most famous paintings in the world and a masterpiece of Renaissance art.
 ```
 
-Using raw `bytes` data from a web request:
+When retrieving a file from the Web, the retrieval result will generally include the file's MIME type. For example, using `requests` (and showing how to stream without using `streamer`):
 
 ```python
 >>> import requests
->>> resp = requests.get('https://upload.wikimedia.org/wikipedia/commons/f/fb/' + \
-                         'Pac-Man_ingame_and_2D_alternative_design.png')
->>> say = streamer(Bot)
->>> say("describe this image.", with_files=[(resp.headers['content-type'], resp.content, 'image')])
-This image shows Pac-Man, the iconic yellow video game character, alongside what appears to be a 
-pixelated yellow pellet or dot (the kind Pac-Man typically eats in the game). Pac-Man is depicted 
-in a more detailed, cartoon-like style with arms, legs, and red shoes, showing him in an animated, 
-happy pose with his mouth open in his characteristic eating position. This appears to be artwork 
-related to the classic arcade game Pac-Man, combining the simple pixelated game element with a 
-more expressive character design.
+>>> response = requests.get('https://example-files.online-convert.com/document/pdf/example.pdf')
+>>> response.headers['content-type']
+'application/pdf'
+>>> conv = Conversation(Bot, [], stream=True)
+>>> filespec = (response.headers['content-type'], response.content, 'document')
+>>> with conv.resume("Please describe this document.", with_files=[filespec]) as stream:
+...   for chunk in stream.text_stream:
+...     print(chunk, end='', flush=True)
+... 
+This is a PDF test file (Version 1.0) that serves as an example document to demonstrate the PDF file 
+format. The document contains educational content about placeholder names used in legal and other 
+contexts.
+
+**Key Content:**
+- **Main Topic**: The use of placeholder names like "John Doe," "Jane Doe," and "Jane Roe"
+- **Usage**: These names are used when someone's true identity is unknown or must be withheld in 
+legal proceedings, or to refer to unidentified corpses or hospital patients
+- **Geographic Usage**: Primarily used in the United States and Canada; other English-speaking 
+countries like the UK, Australia, and New Zealand prefer names like "Joe Bloggs" or "John Smith"
+- **Cultural References**: The document mentions usage in popular culture, including the Frank Capra 
+film "Meet John Doe" and a 2002 TV series
+- **Variations**: Discusses related terms like "Baby Doe," "Precious Doe," and numbering systems 
+for multiple anonymous parties (John Doe #1, #2, etc.)
+
+**Document Details:**
+- Contains both text and a landscape image
+- Source content is from Wikipedia under Attribution-ShareAlike 3.0 Unported license
+- Created by online-convert.com as a file format example
+- Includes Creative Commons licensing information at the bottom
+
+The document appears to be designed primarily for testing PDF functionality while providing 
+informative content about legal naming conventions.>>> 
 ```
 
-Explanations to come!
+Note that in some cases, this may not be reliable due to variations in how web servers are configured. For example, requests for PDFs hosted on Github.com may come back with a `content-type` of `application/octet-stream` which is just a fancy way of saying "this is a bunch of bytes". Unfortunately the Claude API can't work with that and will return a `BadRequestError` - so your mileage may vary.
 
 # More to come, watch this space! :)
