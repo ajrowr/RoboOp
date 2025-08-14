@@ -3,7 +3,7 @@ import json
 import os
 import asyncio
 import anthropic
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, AsyncMock
 from robo import Bot, Conversation, MODELS
 from robo.exceptions import *
 import robo
@@ -368,6 +368,12 @@ class TestToolHandling:
         result = bot.handle_tool_call(toolblock)
         assert result == {'target': 'model', 'message': 'Got value1'}
 
+        bot = ToolBot()
+        toolblock = dict(name='test_tool', input={'param1': 'value1'})
+        
+        result = bot.handle_tool_call(toolblock)
+        assert result == {'target': 'model', 'message': 'Got value1'}
+
 
 class TestBotPreprocessResponse:
     """Test Bot preprocess_response functionality"""
@@ -419,6 +425,7 @@ class TestConversationStartError:
             with pytest.raises(Exception, match='Conversation has already started'):
                 await conv.astart("Hello")
         
+        asyncio.run(test_async())
         # Just ensure the method exists and would raise
         assert hasattr(conv, 'astart')
 
@@ -1334,3 +1341,46 @@ class TestBotSyspromptNotImplementedError:
         bot = Bot()
         with pytest.raises(NotImplementedError, match="This method is not implemented"):
             bot.sysprompt_generate()
+
+
+class TestDictToSNSConversion:
+    """This is mainly for coverage purposes"""
+    
+    def test_dict_to_sns_conversion(self):
+        res = Conversation._make_tool_result_message({'id': 'TEST_ID'}, 'TEST_RESULT')
+        assert res['content'][0]['tool_use_id'] == 'TEST_ID'
+        assert res['content'][0]['content'] == 'TEST_RESULT'
+        
+        res = Conversation._make_tool_request_message({'id': 'TEST_ID', 'name': 'TEST_NAME', 'input': 'TEST_INPUT'})
+        assert res['content'][0]['id'] == 'TEST_ID'
+        assert res['content'][0]['name'] == 'TEST_NAME'
+        assert res['content'][0]['input'] == 'TEST_INPUT'
+
+
+class TestOther:
+    def test_conversation_resume_flat(self):
+        """Test Method 1: start() call without argv for bot with no fields"""
+        with patch.object(robo, '_get_client') as mock_client:
+            mock_response = Mock()
+            mock_response.content = [Mock(text="HELLO")]
+            mock_client.return_value.messages.create.return_value = mock_response
+        
+            b = Bot(client=mock_client())
+            conv = Conversation(b, [])
+            msg = conv.resume('hello')
+            assert robo.gettext(msg) == 'HELLO'
+    
+    def test_conversation_astart(self):
+        async def do_test():
+            with patch.object(robo, '_get_client') as mock_client:
+                mock_response = AsyncMock()
+                mock_response.return_value.content = [Mock(text="HELLO")]
+                mock_client.return_value.messages.create.return_value = mock_response()
+        
+                b = Bot(client=mock_client())
+                conv = Conversation(b)
+                coro = conv.astart('hello')
+                return await coro
+        msg = asyncio.run(do_test())
+        assert robo.gettext(msg) == 'HELLO'
+            
