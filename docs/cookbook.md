@@ -472,7 +472,7 @@ While generally the output of a tool call is used by the model to inform the pro
 
 Writing out the tool definitions like in the above example is pretty cumbersome and lacking in reusability, so experiments are underway around defining tools in an object-oriented way.
 
-```
+```python
 from robo.tools import Tool
 import requests
 
