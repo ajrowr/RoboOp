@@ -1,6 +1,16 @@
 
 import inspect
 
+_types_map = {
+    str: 'string',
+    int: 'number',
+    float: 'number',
+    bool: 'boolean',
+    list: 'array',
+    dict: 'object',
+    type(None): 'null',
+}
+
 class Tool(object):
     __slots__ = ['name', 'description', 'parameter_descriptions', 'target']
     def __call__(self):
@@ -16,7 +26,7 @@ class Tool(object):
             if key == 'self':
                 continue
             attribs = {
-                'type': 'string' if param.annotation is str else '',
+                'type': _types_map[param.annotation],
                 'description': klass.parameter_descriptions[key]
             }
             if param.default is inspect._empty:

@@ -389,88 +389,7 @@ There are three basic modalities for tool use:
 
 These modalities are not mutually exclusive, ie. they can be mixed together. As long as the tools are well specified, the model will usually be able to figure out which ones to use and when, and how to chain them together if needed. RoboOp can generally handle tool calls seamlessly. For more detail about tool use (and tool schemas) check out [Anthropic's documentation on the subject](https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/overview).
 
-Here's a simple example of tool use in RoboOp: ***NOTE:*** *see the next section for an experimental, but more streamlined approach to tool definition.*
-
-```python
-import requests
-
-class FetchAndAnalyseBot(Bot):
-    sysprompt_text = """Your task is to fetch data from a given URL and answer questions about it."""
-    
-    def get_tools_schema(self):
-        return [
-            {
-                "name": "get_url",
-                "description": "Fetch the raw HTML from a given URL.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "description": "The URL to fetch"
-                        }
-                    },
-                    "required": ["url"]
-                }
-            }
-        ]
-    
-    def tools_get_url(self, url=None):
-        print(f"\n[[Fetching URL: {url}]]")
-        pagetext = requests.get(url).text
-        return {
-            'message': pagetext,
-            'target': 'model'
-        }
-
->>> say = streamer(FetchAndAnalyseBot)
->>> say("Please summarise (in one line each) the five fastest growing regional councils described in this document. https://www.stats.govt.nz/information-releases/2023-census-population-counts-by-ethnic-group-age-and-maori-descent-and-dwelling-counts/")
-I'll fetch the content from that Statistics New Zealand URL to find information about the fastest growing regional councils.
-[[Fetching URL: https://www.stats.govt.nz/information-releases/2023-census-population-counts-by-ethnic-group-age-and-maori-descent-and-dwelling-counts/]]
-I can see this is about the 2023 Census population counts, but the document doesn't appear to 
-contain information about the five fastest growing regional councils. Instead, it mentions some 
-fastest growing territorial authorities and regions. Let me look more carefully through the content 
-to see if there's information about regional council growth rates.
-
-Looking at the content, I can see mentions of regional growth rates in the document. Here's what 
-I found about regional councils and their growth:
-
-The document mentions regional growth rates but doesn't explicitly list "the five fastest growing 
-regional councils." However, it does provide information about regional growth. Based on the 
-content, here are the regional councils with notable growth rates mentioned:
-
-1. **Tasman Regional Council** - 10.3% increase (from 52,389 to 57,807) - described as one of the 
-   fastest growing regions in the South Island
-2. **Canterbury Regional Council** - 8.6% increase (from 599,694 to 651,027) - second fastest growing 
-   in the South Island  
-3. **Waikato Regional Council** - 8.9% increase (from 458,202 to 498,771) - highest growth rate in 
-   the North Island
-4. **Northland Regional Council** - 8.3% increase (from 179,076 to 194,007) - high growth rate in 
-   the North Island
-5. **Otago Regional Council** - 6.0 to 7.9% increase (specific figure not provided but shown in 
-   this range on the map)
-
-Note: The document doesn't provide a complete ranking of all 16 regional councils, but these appear 
-to be among the fastest growing based on the information provided. Auckland, despite having the 
-largest population increase in absolute numbers, had a relatively slower growth rate of 5.4%.
-```
-
-Note the name of the function that fulfils the tool call. In the schema, the `name` is given as `get_url`; when the model attempts to call a tool, RoboOp looks for a method of the Bot class named `tools_<tool name>` - in this case `tools_get_url` - and passes it the dictionary of arguments included in the tool call.
-
-Note also the return structure:
-
-```python
-{
-    'message': <the output of the tool call>,
-    'target': <either 'model' or 'client'>
-}
-```
-
-While generally the output of a tool call is used by the model to inform the production of a response, for some use cases you might want to use a tool call to send something to the client instead. For example if your application is a web-integrated chatbot, some tool calls may be intended to trigger functionality in the web application. We'll dig into this more in a future section, but for now, what you need to know is that if you want the model to receive the output of the tool call then set `target` to `'model'` and the output will automatically be routed correctly.
-
-## *EXPERIMENTAL:* Object-oriented tool definitions
-
-Writing out the tool definitions like in the above example is pretty cumbersome and lacking in reusability, so experiments are underway around defining tools in an object-oriented way.
+In RoboOp, we take a streamlined approach to tool definition by using objects subclassed from the `robo.tools.Tool` class. Here's a simple example:
 
 ```python
 from robo.tools import Tool
@@ -535,7 +454,9 @@ and cultural discourse.
 >>> 
 ```
 
-Note the use of Python type hinting to specify the types of the function parameters. This allows for automatic generation of the tool schema; calling `get_tools_schema()` on this object actually gives a near-identical result to the laborious manually-configured one from the earlier version. Note also that there's no need to wrap the return in a dictionary that specifies the target - this is handled automatically by checking for a `target` attribute on the `Tool` class, and defaulting to `model` if it isn't found.
+Note the use of Python type hinting to specify the types of the function parameters. This allows for automatic generation of the tool schema. The tools may be defined inline in the `Bot` class (as shown here) or defined externally and referenced in the `tools` list in the same way.
+
+(Note that object-oriented tool definitions are quite new and somewhat experimental; if you need finer-grained control over tool schema generation, you can override `get_tools_schema()` in a subclass of `Bot`.)
 
 ## File handling
 

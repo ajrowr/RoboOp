@@ -13,74 +13,45 @@ class ToolsTesterTravelPlanner(Bot):
     
     You MUST call these tools in this exact sequence for every travel query. Always provide a comprehensive comparison of both cities' weather before giving route information."""
     
-    def get_tools_schema(self):
-        return [
-            {
-                'name': 'get_city_weather',
-                'description': 'Get current weather conditions for a specific city',
-                'input_schema': {
-                    'type': 'object',
-                    'properties': {
-                        'city_name': {
-                            'type': 'string',
-                            'description': 'Name of the city to get weather for',
-                        }
-                    },
-                    'required': ['city_name']
-                }
-            },
-            {
-                'name': 'calculate_route',
-                'description': 'Calculate distance and travel time between two cities. Only call this after getting weather for both cities.',
-                'input_schema': {
-                    'type': 'object',
-                    'properties': {
-                        'origin_city': {
-                            'type': 'string',
-                            'description': 'Starting city name',
-                        },
-                        'destination_city': {
-                            'type': 'string',
-                            'description': 'Destination city name',
-                        }
-                    },
-                    'required': ['origin_city', 'destination_city']
-                }
-            }
-        ]
-    
-    def tools_get_city_weather(self, city_name):
-        import random
-        weather_conditions = ['sunny', 'cloudy', 'rainy', 'snowy', 'foggy']
-        return {
-            'message': {
+    class GetCityWeather(Tool):
+        description = "Get current weather conditions for a specific city"
+        parameter_descriptions = {
+            'city_name': "Name of the city to get weather for",
+        }
+        def __call__(self, city_name:str):
+            import random
+            weather_conditions = ['sunny', 'cloudy', 'rainy', 'snowy', 'foggy']
+            return {
                 'city_name': city_name,
                 'temperature_celsius': round(random.uniform(-10, 35), 1),
                 'condition': random.choice(weather_conditions),
                 'humidity': random.randint(30, 90),
                 'wind_speed_kmh': round(random.uniform(0, 25), 1)
-            },
-            'target': 'model'
-        }
-    
-    def tools_calculate_route(self, origin_city, destination_city):
-        import random
-        # Simulate route calculation
-        distance_km = random.randint(50, 1500)
-        drive_time_hours = round(distance_km / random.randint(60, 120), 1)
-        flight_time_hours = round(distance_km / random.randint(400, 800), 1)
+            }
         
-        return {
-            'message': {
+    class CalculateRoute(Tool):
+        description = "Calculate distance and travel time between two cities. Only call this after getting weather for both cities."
+        parameter_descriptions = {
+            'origin_city': "Starting city name",
+            'destination_city': "Destination city name"
+        }
+        def __call__(self, origin_city:str, destination_city:str):
+            import random
+            # Simulate route calculation
+            distance_km = random.randint(50, 1500)
+            drive_time_hours = round(distance_km / random.randint(60, 120), 1)
+            flight_time_hours = round(distance_km / random.randint(400, 800), 1)
+        
+            return {
                 'origin': origin_city,
                 'destination': destination_city,
                 'distance_km': distance_km,
                 'estimated_drive_time_hours': drive_time_hours,
                 'estimated_flight_time_hours': flight_time_hours,
                 'recommended_transport': 'flight' if distance_km > 500 else 'car'
-            },
-            'target': 'model'
-        }
+            }
+    
+    tools = [GetCityWeather, CalculateRoute]
 
 
 class GuidedNavigationTester(Bot):
