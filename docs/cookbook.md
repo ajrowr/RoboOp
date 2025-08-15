@@ -535,7 +535,7 @@ and cultural discourse.
 >>> 
 ```
 
-Note the use of Python type hinting to specify the types of the function parameters. This allows for automatic generation of the tool schema; calling `get_tools_schema()` on this object actually gives a near-identical result to the laborious manually-configured one from the earlier version.
+Note the use of Python type hinting to specify the types of the function parameters. This allows for automatic generation of the tool schema; calling `get_tools_schema()` on this object actually gives a near-identical result to the laborious manually-configured one from the earlier version. Note also that there's no need to wrap the return in a dictionary that specifies the target - this is handled automatically by checking for a `target` attribute on the `Tool` class, and defaulting to `model` if it isn't found.
 
 ## File handling
 
