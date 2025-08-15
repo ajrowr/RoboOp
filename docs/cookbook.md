@@ -468,7 +468,7 @@ Note also the return structure:
 
 While generally the output of a tool call is used by the model to inform the production of a response, for some use cases you might want to use a tool call to send something to the client instead. For example if your application is a web-integrated chatbot, some tool calls may be intended to trigger functionality in the web application. We'll dig into this more in a future section, but for now, what you need to know is that if you want the model to receive the output of the tool call then set `target` to `'model'` and the output will automatically be routed correctly.
 
-## Experimental: Object-oriented tool definitions
+## EXPERIMENTAL: Object-oriented tool definitions
 
 Writing out the tool definitions like in the above example is pretty cumbersome and lacking in reusability, so experiments are underway around defining tools in an object-oriented way.
 
@@ -535,7 +535,7 @@ and cultural discourse.
 >>> 
 ```
 
-Note the use of Python type annotations to specify the types of the attributes. This allows for automatic generation of the tool schema; calling `get_tools_schema()` on this object actually gives a near-identical result to the laborious manually-configured one from the earlier version.
+Note the use of Python type hinting to specify the types of the function parameters. This allows for automatic generation of the tool schema; calling `get_tools_schema()` on this object actually gives a near-identical result to the laborious manually-configured one from the earlier version.
 
 ## File handling
 

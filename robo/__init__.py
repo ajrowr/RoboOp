@@ -136,7 +136,9 @@ class Bot(object):
         if tool is None:
             raise Exception(f'Tool function not found: tools_{tooluseblock.name}')
         if type(tool) is type:
-            target = getattr(tool, 'target', 'model')
+            target = getattr(tool, 'target', None)
+            if target is None or type(target) is types.MemberDescriptorType:
+                target = 'model'
             return {'target': target, 'message': tool()(**tooluseblock.input)}
         else:
             return tool(**tooluseblock.input)

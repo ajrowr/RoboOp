@@ -2,7 +2,7 @@
 import inspect
 
 class Tool(object):
-    __slots__ = ['name', 'description', 'parameter_descriptions']
+    __slots__ = ['name', 'description', 'parameter_descriptions', 'target']
     def __call__(self):
         raise NotImplemented()
     
