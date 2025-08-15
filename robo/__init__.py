@@ -9,6 +9,7 @@ import os
 import json
 import datetime
 import time
+import types
 from types import SimpleNamespace
 
 
@@ -51,7 +52,8 @@ class Bot(object):
     bots with specific behaviors and tool integrations.
     """
     __slots__ = ['fields', 'sysprompt_path', 'sysprompt_text', 'client', 'model', 
-            'temperature', 'max_tokens', 'oneshot', 'welcome_message', 'soft_start']
+            'temperature', 'max_tokens', 'oneshot', 'welcome_message', 'soft_start', 
+            'tools']
     """soft_start will inject the welcome_message into the conversation context as though 
             the agent had said it, making it think that the conversation has already
             begun. Beware of causing confusion by soft-starting with something the model 
@@ -81,11 +83,15 @@ class Bot(object):
         """
         raise NotImplementedError("This method is not implemented")
     
-    def get_tools_schema(self):
+    @classmethod
+    def get_tools_schema(klass):
         """Return the schema describing tools available to this bot.
         
         Override this method to define tools that the bot can use during conversations.
         Tool implementations should be provided as methods named 'tools_<toolname>'.
+        
+        Alternatively, Tool subclasses may be provided as a list on the `tools` attribute
+        of a subclass, in which case this function will query those to build a schema.
         
         Returns:
             list: Tool schema following Anthropic's API format
@@ -96,7 +102,10 @@ class Bot(object):
         The actual tool call functions are implemented in a subclass as methods such as
              def tool_<toolname>(self, paramname1=None, paramname2=None, ...)
         """
-        return []
+        if (tools := getattr(klass, 'tools', None)) and type(tools) is not types.MemberDescriptorType:
+            return [tool.get_call_schema() for tool in tools]
+        else:
+            return []
     
     def handle_tool_call(self, tooluseblock):
         """Execute a tool call based on the provided tool use block. Looks for a function to
@@ -120,11 +129,17 @@ class Bot(object):
         """
         if type(tooluseblock) is dict:
             tooluseblock = SimpleNamespace(**tooluseblock)
-        toolfnname = f'tools_{tooluseblock.name}'
-        tool = getattr(self, toolfnname, None)
+        for toolfnname_candidate in [f'tools_{tooluseblock.name}', tooluseblock.name]:
+            tool = getattr(self, toolfnname_candidate, None)
+            if tool:
+                break
         if tool is None:
-            raise Exception(f'Tool function not found: {toolfnname}')
-        return tool(**tooluseblock.input)
+            raise Exception(f'Tool function not found: tools_{tooluseblock.name}')
+        if type(tool) is type:
+            target = getattr(tool, 'target', 'model')
+            return {'target': target, 'message': tool()(**tooluseblock.input)}
+        else:
+            return tool(**tooluseblock.input)
     
     @property
     def sysprompt_clean(self):

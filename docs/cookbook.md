@@ -468,6 +468,75 @@ Note also the return structure:
 
 While generally the output of a tool call is used by the model to inform the production of a response, for some use cases you might want to use a tool call to send something to the client instead. For example if your application is a web-integrated chatbot, some tool calls may be intended to trigger functionality in the web application. We'll dig into this more in a future section, but for now, what you need to know is that if you want the model to receive the output of the tool call then set `target` to `'model'` and the output will automatically be routed correctly.
 
+## Experimental: Object-oriented tool definitions
+
+Writing out the tool definitions like in the above example is pretty cumbersome and lacking in reusability, so experiments are underway around defining tools in an object-oriented way.
+
+```
+from robo.tools import Tool
+import requests
+
+class FetchAndAnalyseBot(Bot):
+    sysprompt_text = """Your task is to retrieve and analyse the contents of a provided URL."""
+    
+    class GetURL(Tool):
+        description = 'Fetch the raw HTML from a given URL'
+        parameter_descriptions = {
+            'url': 'The URL to fetch',
+        }
+        def __call__(self, url:str):
+            print(f"\n[[Fetching URL: {url}]]")
+            pagetext = requests.get(url).text
+            return pagetext
+    
+    tools = [GetURL]
+
+>>> say = streamer(FetchAndAnalyseBot)
+>>> say('https://simple.wikipedia.org/wiki/Barbenheimer')
+I'll fetch the content from that Wikipedia page about Barbenheimer for you.
+[[Fetching URL: https://simple.wikipedia.org/wiki/Barbenheimer]]
+Based on the Wikipedia page content, here's an analysis of **Barbenheimer**:
+
+## What is Barbenheimer?
+
+**Barbenheimer** is an internet phenomenon and meme that emerged before July 21, 2023, when two 
+highly contrasting movies were released on the same date:
+- *Barbie* - a fantasy comedy based on the fashion doll
+- *Oppenheimer* - a biographical thriller about theoretical physicist J. Robert Oppenheimer
+
+The term is a portmanteau (combination) of the two movie titles.
+
+## Key Aspects of the Phenomenon
+
+**The Contrast**: The meme gained popularity specifically because these two films were so dramatically
+different - *Polygon* described them as "extremely opposite to each other." The juxtaposition of a 
+pink, lighthearted Barbie movie with a serious, dark biographical film about the creator of the atomic 
+bomb created comedic appeal.
+
+**Cultural Impact**: 
+- Movie theaters began selling double features of both films
+- Celebrities participated, including Tom Cruise, director Greta Gerwig, and stars Margot Robbie and 
+  Cillian Murphy
+- Murphy encouraged people to "go see both, on the same day"
+- Instead of competing against each other (as typically happens with major simultaneous releases), the 
+  films actually helped each other
+
+**Box Office Success**:
+- *Barbie* made $22.3 million in Thursday night previews
+- *Oppenheimer* made $10.5 million in previews  
+- This was the first time in 2023 that two movies each made over $10 million in previews
+
+**Awards Recognition**: The combined films earned 21 nominations at the 96th Academy Awards, with 
+both nominated for Best Picture and *Oppenheimer* receiving the most nominations of the year (13).
+
+Barbenheimer represents a unique cultural moment where contrasting entertainment became complementary 
+rather than competitive, demonstrating the power of internet memes to shape movie-going behavior 
+and cultural discourse.
+>>> 
+```
+
+Note the use of Python type annotations to specify the types of the attributes. This allows for automatic generation of the tool schema; calling `get_tools_schema()` on this object actually gives a near-identical result to the laborious manually-configured one from the earlier version.
+
 ## File handling
 
 There are many scenarios in which it is useful to include files alongside your textual prompts. RoboOp makes this straightforward with flexible handling of both files and raw file data.
@@ -494,8 +563,8 @@ striking and cheerful composition that captures the essence of a perfect summer 
 >>> 
 ```
 
-Besides the raw data of the file, the Claude API needs to know the MIME type of the file and the type of content block it will be enclosed in. Valid container types are `document`, `image`, and `container_upload`.
-In the example above, the file is referenced as a path on the local system, in which case RoboOp will attempt to infer the MIME type and container type from the file's extension.
+Besides the raw data of the file, the Claude API needs to know the MIME type of the file and the type of content block it will be enclosed in. Valid content block types are `document`, `image`, and `container_upload`.
+In the example above, the file is referenced as a path on the local system, in which case RoboOp will attempt to infer the MIME type and content block type from the file's extension.
 
 For finer-grained control, you can refer to the file in what we call "filespec" form, which is a three-tuple of `(mimetype, file_bytes_object_or_path, content_block_type)`. `file_bytes_object_or_path` can be any of:
 - Raw `bytes`

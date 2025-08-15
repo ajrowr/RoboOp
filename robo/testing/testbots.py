@@ -1,5 +1,9 @@
 
+import requests
+
 from robo import *
+from robo.tools import Tool
+
 
 class ToolsTesterTravelPlanner(Bot):
     sysprompt_text = """You are a travel planning assistant. When users ask about travel between cities, you must:
@@ -118,3 +122,19 @@ class GuidedNavigationTester(Bot):
             # return ('@@@@RECONNECT', True)
             return conversation._make_tool_result_message({'id': tu_id}, "@@@@RECONNECT")
     
+
+class FetchAndAnalyseBot(Bot):
+    sysprompt_text = """Your task is to retrieve and analyse the contents of either a provided URL."""
+    
+    class GetURL(Tool):
+        description = 'Fetch the raw HTML from a given URL'
+        parameter_descriptions = {
+            'url': 'The URL to fetch',
+        }
+        def __call__(self, url:str):
+            print(f"\n[[Fetching URL: {url}]]")
+            pagetext = requests.get(url).text
+            return pagetext
+    
+    tools = [GetURL]
+
