@@ -389,7 +389,7 @@ There are three basic modalities for tool use:
 
 These modalities are not mutually exclusive, ie. they can be mixed together. As long as the tools are well specified, the model will usually be able to figure out which ones to use and when, and how to chain them together if needed. RoboOp can generally handle tool calls seamlessly. For more detail about tool use (and tool schemas) check out [Anthropic's documentation on the subject](https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/overview).
 
-Here's a simple example of tool use in RoboOp:
+Here's a simple example of tool use in RoboOp: ***NOTE:*** *see the next section for an experimental, but more streamlined approach to tool definition.*
 
 ```python
 import requests
