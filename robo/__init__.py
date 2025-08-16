@@ -13,7 +13,7 @@ import types
 from types import SimpleNamespace
 
 
-API_KEY_FILE = None ## If you want to load it from a file 
+API_KEY_FILE = os.environ.get('ROBO_API_KEY_FILE', None) ## In case you want to load it from a file 
 API_KEY_ENV_VAR = None ## If you want to use a different env var instead of ANTHROPIC_API_KEY
 
 STREAM_WRAPPER_CLASS_SYNC = StreamWrapperWithToolUse
@@ -550,10 +550,16 @@ class Conversation(object):
         elif canned_response is not None:
             return self._handle_canned_response(message, canned_response)
         
-        if self.is_streaming:
-            return await self._aresume_stream(message, is_tool_message=is_tool_message, with_files=with_files)
-        else:
-            return await self._aresume_flat(message, is_tool_message=is_tool_message, with_files=with_files)
+        try:
+            if self.is_streaming:
+                return await self._aresume_stream(message, is_tool_message=is_tool_message, with_files=with_files)
+            else:
+                return await self._aresume_flat(message, is_tool_message=is_tool_message, with_files=with_files)
+        except TypeError as exc:
+            if str(exc).startswith('"Could not resolve authentication method'):
+                raise Exception(f"Authentication method not valid, please ensure that one of ROBO_API_KEY_FILE or ANTHROPIC_API_KEY is set") from exc
+            else:
+                raise
 
     def _handle_canned_response(self, original_message, canned_response):
         """Handle canned responses (works for both sync and async). If original_message
@@ -666,10 +672,16 @@ class Conversation(object):
         elif canned_response is not None:
             return self._handle_canned_response(message, canned_response)
         
-        if self.is_streaming:
-            return self._resume_stream(message, is_tool_message=is_tool_message, with_files=with_files)
-        else:
-            return self._resume_flat(message, is_tool_message=is_tool_message, with_files=with_files)
+        try:
+            if self.is_streaming:
+                return self._resume_stream(message, is_tool_message=is_tool_message, with_files=with_files)
+            else:
+                return self._resume_flat(message, is_tool_message=is_tool_message, with_files=with_files)
+        except TypeError as exc:
+            if str(exc).startswith('"Could not resolve authentication method'):
+                raise Exception(f"Authentication method not valid, please ensure that one of ROBO_API_KEY_FILE or ANTHROPIC_API_KEY is set") from exc
+            else:
+                raise
 
     @classmethod
     def _compile_user_message(klass, message, with_files=[]):

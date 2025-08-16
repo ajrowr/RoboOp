@@ -35,15 +35,31 @@ Your crime spree ends here, citizen.
 >>> 
 ```
 
+To get started:
+```sh
+export ANTHROPIC_API_KEY='<your api key>'
+# or
+export ROBO_API_KEY_FILE='<path to API key stored in a file>'
+
+# installing with Pip:
+pip install RoboOp
+
+# installing with Uv:
+uv add RoboOp
+
+# using Uv for a throwaway REPL:
+uv run --with RoboOp -- python
+```
+
 The main classes are `Bot` and `Conversation`. `Conversation` supports both streaming and non-streaming responses. `streamer` is provided as a thin wrapper around `Conversation` that offers a convenient way of getting started as well as demo code.
 
 The API is designed specifically around getting you up and running quickly. `Bot` can accept system prompts inline (as `sysprompt_text`) or loaded from a file (via `sysprompt_path`) and uses `fields` as a way to know what values can be interpolated into the sysprompt. 
 
-More detailed general use (without `streamer`):
+More detailed general use (non-streaming):
 
 ```python
 from robo import Bot, Conversation
-convo = Conversation(Bot, stream=False) ## Defaults to Claude Sonnet 4 with a blank system prompt
+convo = Conversation(Bot) ## Defaults to Claude Sonnet 4 with a blank system prompt
 convo.start("Hi, what's your name?")
 ... # a Message object ensues
 convo.resume("Claude, you're so dreamy")
@@ -51,7 +67,7 @@ convo.resume("Claude, you're so dreamy")
 ```
 
 In this case the return value is an `anthropic.types.message.Message` object whose contents can be accessed as `message.content[0].text`. The conversation history is automatically updated and can be found in `convo.messages`. (Note: for streaming responses the conversation isn't updated with the model response
-until the stream finishes being consumed by your code, so keep an eye on that!) Note that `stream` defaults to False, but it's explicated here for demonstration purposes.
+until the stream finishes being consumed by your code, so keep an eye on that!)
 
 Now for an example with a system prompt, interpolable fields and a specific model:
 
@@ -85,7 +101,7 @@ convo = Conversation(Animal, {'ANIMAL_TYPE': 'golden retriever'})
 convo.resume("Here boy!")
 ```
 
-These examples all assume you've got your Anthropic API key defined via environment variable `ANTHROPIC_API_KEY` . If you need to do something different then you can instanciate the bot like `Animal.with_api_key(your_api_key)` instead (as `Conversation` will accept either a class or an instance in its constructor). Alternatively you can set `robo.API_KEY_FILE` (to load the key from a file) or `robo.API_KEY_ENV_VAR` (to nominate a different env var) sometime before creating your `Conversation` instance.
+As mentioned at the start, these examples assume you've got your Anthropic API key defined via environment variable `ANTHROPIC_API_KEY` or are using `ROBO_API_KEY_FILE` to load the key from a file. If you need to do something different then you can instanciate the bot like `Animal.with_api_key(your_api_key)` instead (as `Conversation` will accept either a `Bot` class or an instance of such a class in its constructor). Alternatively you can set `robo.API_KEY_ENV_VAR` (to nominate a different env var containing your key) sometime before creating your `Conversation` instance.
 
-These examples barely scratch the surface of what's possible with RoboOp. Check out [docs/cookbook.md](docs/cookbook.md) for more!
+These examples barely scratch the surface of what's possible with RoboOp. Check out [docs/cookbook.md](https://github.com/ajrowr/RoboOp/blob/master/docs/cookbook.md) for more!
 
