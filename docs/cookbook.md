@@ -21,54 +21,36 @@ Some terminology:
 
 ## Setting up
 
-You'll need a developer account with Anthropic to get an API key for use with RoboOp. You can get this process underway at [https://console.anthropic.com/](https://console.anthropic.com/), you'll probably need to buy some credits but you can get started with as little as $5USD.
+You'll need a developer account with Anthropic to get an API key for use with RoboOp. You can get this process underway at [https://console.anthropic.com/](https://console.anthropic.com/). You'll probably need to buy some credits but you can get started with as little as $5USD.
 
 Once you have an API key you can add it to your add it to your environment like so (macOS and Linux, not sure about Windows sorry):
 
 ```sh
-export ANTHROPIC_API_KEY="<the API key>"
+export ANTHROPIC_API_KEY='<the API key>'
 ```
 
-To install RoboOp, download the .zip file from [here](https://github.com/ajrowr/RoboOp/archive/refs/heads/master.zip) and unzip it somewhere on your system. Then add it to your Python path:
-
+Alternatively you can load the key from a file:
 ```sh
-export PYTHONPATH=$PYTHONPATH:/path/to/RoboOp
+export ROBO_API_KEY_FILE='<path to your API key file>'
 ```
 
-The only dependency is `anthropic`:
-
+To install RoboOp:
 ```sh
-pip install anthropic
+# installing with Pip:
+pip install RoboOp
+
+# adding to a project with Uv:
+cd /your/project/dir
+uv add RoboOp
+
+# using Uv for a throwaway REPL:
+uv run --with RoboOp -- python
 ```
 
 Then launch Python and you should be ready to go! The following examples assume that you start with:
 
 ```python
 from robo import *
-```
-
-### Using RoboOp in virtual environments
-
-If you're using a virtual environment manager then you can leverage that instead of fiddling around with setting the path manually.
-
-***With Pip***:
-```sh
-pip install --editable /path/to/RoboOp
-python
-```
-
-***With Uv***:
-```sh
-# with an existing project
-cd /your/projectdir
-uv add /path/to/RoboOp
-uv run -- python
-
-# if you just want a throwaway REPL
-uv run --with /path/to/RoboOp -- python
-
-# if RoboOp has been updated
-uv run --reinstall -- python
 ```
 
 ## Recap
