@@ -35,10 +35,40 @@ To install RoboOp, download the .zip file from [here](https://github.com/ajrowr/
 export PYTHONPATH=$PYTHONPATH:/path/to/RoboOp
 ```
 
+The only dependency is `anthropic`:
+
+```sh
+pip install anthropic
+```
+
 Then launch Python and you should be ready to go! The following examples assume that you start with:
 
 ```python
 from robo import *
+```
+
+### Using RoboOp in virtual environments
+
+If you're using a virtual environment manager then you can leverage that instead of fiddling around with setting the path manually.
+
+***With Pip***:
+```sh
+pip install --editable /path/to/RoboOp
+python
+```
+
+***With Uv***:
+```sh
+# with an existing project
+cd /your/projectdir
+uv add /path/to/RoboOp
+uv run -- python
+
+# if you just want a throwaway REPL
+uv run --with /path/to/RoboOp -- python
+
+# if RoboOp has been updated
+uv run --reinstall -- python
 ```
 
 ## Recap
@@ -403,6 +433,7 @@ class FetchAndAnalyseBot(Bot):
         parameter_descriptions = {
             'url': 'The URL to fetch',
         }
+        
         def __call__(self, url:str):
             print(f"\n[[Fetching URL: {url}]]")
             pagetext = requests.get(url).text
