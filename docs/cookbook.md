@@ -3,6 +3,8 @@
 
 Welcome to the Cookbook, where you can learn by doing with concrete examples of how to build with RoboOp.
 
+***Interested in connecting RoboOp to the web with Django? Check out our new sister project, [BotBench](https://github.com/ajrowr/BotBench)!***
+
 ## Basic concepts
 
 RoboOp is designed to make building Claude-powered applications straightforward and intuitive. Whether you're creating simple chatbots or sophisticated AI agents, understanding the core concepts behind how LLMs work will help you make the most of the framework's capabilities and design better bots.
@@ -179,7 +181,7 @@ Squeak!
 Neigh!
 ```
 
-One more thing, if you wish to use method 4 to begin a conversation with a bot that doesn't take parameters, you'll need to pass an empty list or dict (as the presence of that argument is what triggers the automatic prestart):
+One more thing, if you wish to use method 4 to begin a conversation with a bot that doesn't take field arguments, you'll need to pass an empty list or dict (as the presence of that argument is what triggers the automatic prestart):
 
 ```python
 >>> conv = Conversation(Bot, [])
@@ -331,7 +333,7 @@ Notice that:
 
 The reason for this is that prompt caching applies to all segments up to and including the one where `set_cache_control` is used. Prompt caching relies on the inputs being the same up to the cache control clause - if anything at all changes, the cache will miss - so the pattern of packing a final segment with the dynamic fields and caching up to the segment prior maximises the cacheability of your system prompt.
 
-Note that you can use `set_cache_control` on multiple segments. Have a read of the Anthropic docs (linked above) for more on this.
+Note that you can use `set_cache_control` on multiple (up to four) system prompt segments. Have a read of the Anthropic docs (linked above) for more on this.
 
 LLMs are very flexible about the type of textual data you can include in system prompts - as well as understanding structured data formats such as JSON, YAML and HTML, generally if a human would find something easy to understand then an LLM almost certainly will too. It's worth keeping your token count in mind - for example if you have JSON or YAML data with a repetitive structure, it might be worth reformatting it as CSV or similar so that you're not squandering tokens on repeating the same field names over and over. In fact, the LLM can help with this:
 
