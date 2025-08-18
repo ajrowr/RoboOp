@@ -479,10 +479,13 @@ class Conversation(object):
         
         Args:
             argv (list): Arguments for system prompt template substitution
+        
+        Returns: self
         """
         self.argv = self._convert_argv_if_needed(argv)
         self.sysprompt = self.bot.sysprompt_vec(self.argv)
         self.started = True
+        return self
     
     def start(self, *args):
         """Start a new conversation with an initial message.
@@ -779,7 +782,7 @@ class Conversation(object):
 
 
 class LoggedConversation(Conversation):
-    """A conversation that automatically logs all interactions to disk.
+    """A Conversation that automatically logs all interactions to disk.
     
     Extends Conversation to provide persistent storage of conversation history
     in JSON format, enabling conversation resumption and analysis.
@@ -838,7 +841,7 @@ class LoggedConversation(Conversation):
         self._write_log()
     
     @classmethod
-    def revive(klass, bot, conversation_id, logs_dir, argv=[], **kwargs):
+    def revive(klass, bot, conversation_id, logs_dir, **kwargs):
         """Restore a previously logged conversation from disk.
         
         Args:
@@ -865,7 +868,7 @@ class LoggedConversation(Conversation):
         with (Path(logs_dir) / logdir_candidate / 'conversation.json').open('r') as reader:
             logdata = json.load(reader)
         revenant.messages = logdata['messages']
-        revenant.prestart(argv)
+        revenant.prestart(logdata['argv'])
         return revenant
 
 
@@ -941,4 +944,4 @@ To use streamer_async :
 >>> asyncio.run(coro)
 """
 
-__all__ = ['Bot', 'Conversation', 'streamer', 'streamer_async', 'gettext', 'getjson', 'printmsg', 'MODELS']
+__all__ = ['Bot', 'Conversation', 'LoggedConversation', 'streamer', 'streamer_async', 'gettext', 'getjson', 'printmsg', 'MODELS']

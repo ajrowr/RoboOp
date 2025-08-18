@@ -172,6 +172,11 @@ Woof! Bark!
 >>> printmsg(conv3.resume('hello'))
 Honk!
 
+# prestart() returns the Conversation object, so this works too:
+>>> conv3a = Conversation(AnimalBot).prestart({'ANIMAL_TYPE': 'sheep'})
+>>> printmsg(conv3a.resume('hello'))
+Baa!
+
 # Method 4
 >>> conv4 = Conversation(AnimalBot, ['mouse']) # This prestarts the conversation automatically
 >>> printmsg(conv4.resume('hello'))
@@ -564,5 +569,38 @@ informative content about legal naming conventions.
 ```
 
 Note that in some cases, inferring the MIME type from the response may not be reliable due to variations in how web servers are configured. For example, requests for PDFs hosted on Github.com may come back with a `content-type` of `application/octet-stream` (which is just a fancy way of saying "this is a bunch of bytes"). Unfortunately that's not enough for the Claude API to work with and it will return a `BadRequestError` - so your mileage may vary.
+
+## Persistable chat sessions
+
+To facilitate resumability of conversations, there's a specialised `Conversation` subclass - `LoggedConversation` - which serialises conversations to disk after each message, and can load them back in as needed. 
+
+```python
+>>> from robo import *
+>>> chat_logs_dir = '/path/to/chatlog_dir/'
+>>> lconv = LoggedConversation(Bot, logs_dir=chat_logs_dir).prestart([])
+>>> printmsg(lconv.resume("""What's the square root of 10?"""))
+The square root of 10 is approximately 3.162.
+
+More precisely, √10 ≈ 3.16227766...
+
+Since 10 is not a perfect square, its square root is an irrational number that 
+goes on infinitely without repeating.
+>>> print(conv_id := lconv.conversation_id)
+9ca342fe-6f6a-4be2-aefb-c4b4d2ec983b
+>>> lconv2 = LoggedConversation.revive(Bot, conv_id, chat_logs_dir)
+>>> printmsg(lconv2.resume("""What about 1000?"""))
+The square root of 1000 is approximately 31.623.
+
+More precisely, √1000 ≈ 31.62277660...
+
+You can also express this exactly as √1000 = √(100 × 10) = 10√10, which is 10 
+times the square root of 10.
+
+Since 1000 is not a perfect square, its square root is also an irrational number.
+```
+
+The `LoggedConversation` automatically assigns a UUID-based `conversation_id` to track each unique conversation, which can then be used to revive the conversation at a later date.
+
+Note that unlike standard `Conversation` objects, `LoggedConversation` doesn't accept field arguments as the second argument, so you'll need to use either `loggedconversation.start([...], ...)` or `loggedconversation.prestart([...])` after initialisation. Because `prestart` returns the object, you can assign the result to a variable as shown above.
 
 # More to come, watch this space! :)
