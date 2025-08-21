@@ -53,7 +53,7 @@ class Bot(object):
     """
     __slots__ = ['fields', 'sysprompt_path', 'sysprompt_text', 'client', 'model', 
             'temperature', 'max_tokens', 'oneshot', 'welcome_message', 'soft_start', 
-            'tools']
+            'tools', 'bot_name']
     """soft_start will inject the welcome_message into the conversation context as though 
             the agent had said it, making it think that the conversation has already
             begun. Beware of causing confusion by soft-starting with something the model 
@@ -67,6 +67,17 @@ class Bot(object):
             **{'type': 'text', 'text': text}, 
             **({'cache_control': {'type': 'ephemeral'}} if set_cache_control else {})
         }
+    
+    @property
+    def name(self):
+        botnameattr = getattr(self, 'bot_name', None)
+        return botnameattr if botnameattr else self.__class__.__name__
+    
+    def __repr__(self):
+        if (botnameattr := getattr(self, 'bot_name', None)):
+            return f'<"{botnameattr}" at 0x{id(self):x}>'
+        else:
+            return super().__repr__()
     
     def sysprompt_generate(self):
         """Generate a system prompt dynamically as an alternative to static text.
@@ -281,6 +292,12 @@ class Conversation(object):
             self.prestart(argv)
         else:
             self.argv = []
+    
+    def __repr__(self):
+        try:
+            return f'<{self.__class__.__name__} with {repr(self.bot)} at 0x{id(self):x}>'
+        except:
+            return super().__repr__()
     
     def _convert_argv_if_needed(self, args, strict=True):
         if type(args) is dict:
