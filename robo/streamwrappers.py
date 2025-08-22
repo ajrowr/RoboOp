@@ -1,5 +1,7 @@
 
 class StreamWrapper:
+    suppress_append_accumulated = False
+    
     def __init__(self, stream, conversation_obj):
         self.stream = stream
         self.conversation_obj = conversation_obj
@@ -15,8 +17,12 @@ class StreamWrapper:
         result = self.stream.__exit__(exc_type, exc_val, exc_tb)
         if exc_type is None and self.accumulated_text:
             asst_message = self.conversation_obj._make_text_message('assistant', self.accumulated_text)
-            self.conversation_obj.messages.append(asst_message)
+            if not self.suppress_append_accumulated:
+                self.conversation_obj.messages.append(asst_message)
             self.conversation_obj._post_stream_hook()
+            def callback_handler(callback_function):
+                callback_function(self.stream_context.get_final_message())
+            self.conversation_obj._execute_callbacks('response_complete', callback_handler)
         
         return result
     
@@ -35,6 +41,8 @@ class StreamWrapper:
 
 
 class StreamWrapperWithToolUse(StreamWrapper):
+    suppress_append_accumulated = True
+    
     @property
     def text_stream(self):
         
@@ -49,6 +57,7 @@ class StreamWrapperWithToolUse(StreamWrapper):
                 elif event.type == 'text':
                     yield event.text
                     accumulated_text += event.text
+                    self.accumulated_text = accumulated_text
                 elif event.type == 'content_block_stop' and current_block_type == 'ToolUseBlock':
                     treq = {
                         'type': 'tool_use',
@@ -107,6 +116,10 @@ class AsyncStreamWrapper:
             # finalmessage = await self.stream_context.get_final_message() ##
             # print(finalmessage.usage.model_dump()) ##
             await self.conversation_obj._post_stream_hook_async()
+            async def callback_handler(callback_function):
+                final_message = await self.stream_context.get_final_message()
+                callback_function(final_message)
+            await self.conversation_obj._aexecute_callbacks('response_complete', callback_handler)
         
         return result
     

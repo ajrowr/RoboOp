@@ -1046,7 +1046,7 @@ class TestLoggedConversation:
         
         assert revived_conv.conversation_id == 'revive-test'
         assert revived_conv.messages == original_conv.messages
-        assert revived_conv.argv == ['new-arg']  # New argv should override
+        assert revived_conv.argv == ['test-arg']  # Old argv should override
         assert revived_conv.started == True
 
 

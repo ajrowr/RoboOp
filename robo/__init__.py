@@ -11,6 +11,7 @@ import datetime
 import time
 import types
 from types import SimpleNamespace
+from collections import defaultdict
 
 
 API_KEY_FILE = os.environ.get('ROBO_API_KEY_FILE', None) ## In case you want to load it from a file 
@@ -267,7 +268,8 @@ class Conversation(object):
     """
     __slots__ = ['messages', 'bot', 'sysprompt', 'argv', 'max_tokens', 'message_objects', 
                 'is_streaming', 'started', 'is_async', 'oneshot', 'cache_user_prompt', 
-                'soft_started', 'tool_use_blocks']
+                'soft_started', 'tool_use_blocks'] + \
+                ['_callbacks_registered']
     def __init__(self, bot, argv=None, stream=False, async_mode=False, soft_start=None, cache_user_prompt=False):
         self.is_async = async_mode
         if type(bot) is type:
@@ -278,6 +280,7 @@ class Conversation(object):
         self.oneshot = self.bot.oneshot
         self.messages = []
         self.message_objects = []
+        self._callbacks_registered = defaultdict(list)
         self.cache_user_prompt = cache_user_prompt
         self.tool_use_blocks = SimpleNamespace(pending=[], resolved=[])
         if (soft_start or (self.bot.soft_start and not soft_start is False)) and self.bot.welcome_message:
@@ -315,6 +318,20 @@ class Conversation(object):
             return field_values
         else:
             return args
+    
+    def register_callback(self, callback_name, callback_fn):
+        self._callbacks_registered[callback_name].append(callback_fn)
+        
+    def _lookup_callbacks(self, callback_name):
+        return self._callbacks_registered[callback_name]
+    
+    def _execute_callbacks(self, callback_name, callback_handler):
+        for registered_callback in self._lookup_callbacks(callback_name):
+            callback_handler(registered_callback)
+    
+    async def _aexecute_callbacks(self, callback_name, callback_handler):
+        for registered_callback in self._lookup_callbacks(callback_name):
+            await callback_handler(registered_callback)
     
     @classmethod
     def _make_text_message(klass, role, content):
@@ -517,7 +534,11 @@ class Conversation(object):
             
         Raises:
             Exception: If conversation has already started
+            SyncAsyncMismatchError: if Conversation.is_async is True
         """
+        if self.is_async:
+            raise SyncAsyncMismatchError("Sync operation attempted during async mode")
+        
         if type(args[0]) is list:
             argv, message = args
         else:
@@ -541,7 +562,11 @@ class Conversation(object):
             
         Raises:
             Exception: If conversation has already started
+            SyncAsyncMismatchError: if Conversation.is_async is not True
         """
+        if not self.is_async:
+            raise SyncAsyncMismatchError("Async operation attempted during sync mode")
+        
         if type(args[0]) is list:
             argv, message = args
         else:
@@ -560,7 +585,14 @@ class Conversation(object):
             
         Returns:
             The bot's response, which may be a model response or canned response
+        
+        Raises:
+            SyncAsyncMismatchError: if Conversation.is_async is not True
         """
+        if not self.is_async:
+            raise SyncAsyncMismatchError("Async operation attempted during sync mode")
+        if not self.started:
+            raise Exception("Attempting to resume a conversation that has not been started")
         # Check for canned response first
         canned_response = self.bot.preprocess_response(message, self)
         is_tool_message = False
@@ -671,7 +703,11 @@ class Conversation(object):
                 # Handle model-targeted tool responses
                 resps = self._compile_tool_responses()
                 return await self._aresume_flat(resps, is_tool_message=True)
-    
+        
+        def callback_handler(callback_function):
+            callback_function(message_out)
+        self._execute_callbacks('response_complete', callback_handler)
+        
         return message_out
     
     def resume(self, message, with_files=[]):
@@ -682,7 +718,15 @@ class Conversation(object):
             
         Returns:
             The bot's response, which may be a model response or canned response
+        
+        Raises:
+            SyncAsyncMismatchError: if Conversation.is_async is True
         """
+        if self.is_async:
+            raise SyncAsyncMismatchError("Sync operation attempted during async mode")
+        if not self.started:
+            raise Exception("Attempting to resume a conversation that has not been started")
+        
         # Check for canned response first
         canned_response = self.bot.preprocess_response(message, self)
         is_tool_message = False
@@ -788,7 +832,11 @@ class Conversation(object):
                 # Handle model-targeted tool responses
                 resps = self._compile_tool_responses()
                 return self._resume_flat(resps, is_tool_message=True)
-    
+        
+        def callback_handler(callback_function):
+            callback_function(message_out)
+        self._execute_callbacks('response_complete', callback_handler)
+        
         return message_out
     
     def _post_stream_hook(self):
@@ -917,7 +965,7 @@ def streamer(bot_or_conversation, args=[], cc=None):
         print()
     return streamit
 
-def streamer_async(bot_or_conversation, args=[]):
+def streamer_async(bot_or_conversation, args=[], cc=None):
     """Create an async streaming conversation function for real-time output.
     
     Args:
@@ -937,6 +985,8 @@ def streamer_async(bot_or_conversation, args=[]):
         async with await convo.aresume(message, with_files=with_files) as stream:
             async for chunk in stream.text_stream:
                 print(chunk, end="", flush=True)
+                if cc:
+                    cc.write(chunk)
     return streamit
 
 def gettext(message):
