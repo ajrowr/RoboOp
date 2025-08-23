@@ -1,6 +1,6 @@
 
 from robo import *
-from . import testbots
+# from . import testbots
 import asyncio
 
 class BaseTester(object):

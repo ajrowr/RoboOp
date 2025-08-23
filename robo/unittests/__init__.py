@@ -4,9 +4,11 @@ import os
 import asyncio
 import anthropic
 from unittest.mock import Mock, patch, AsyncMock
-from robo import Bot, Conversation, MODELS
+# from robo import Bot, Conversation, MODELS
+from robo import *
 from robo.exceptions import *
 import robo
+from io import StringIO
 
 
 class TestBot:
@@ -1187,7 +1189,6 @@ class TestStreamerFunctions:
     
     def test_streamer_with_cc_parameter(self):
         """Test streamer function with cc parameter"""
-        from io import StringIO
         cc = StringIO()
         stream_func = robo.streamer(Bot, cc=cc)
         assert callable(stream_func)
@@ -1357,6 +1358,46 @@ class TestDictToSNSConversion:
         assert res['content'][0]['input'] == 'TEST_INPUT'
 
 
+def configure_mock_client_async_flat(mock_client):
+    mock_response = AsyncMock()
+    mock_response.return_value.content = [Mock(text="HELLO")]
+    mock_client.return_value.messages.create.return_value = mock_response()
+    return mock_client
+
+def configure_mock_client_sync_flat(mock_client):
+    mock_response = Mock()
+    mock_response.return_value.content = [Mock(text="HELLO")]
+    mock_client.return_value.messages.create.return_value = mock_response()
+    return mock_client
+
+def configure_mock_client_sync_stream(mock_client):
+    mock_response = Mock()
+    mock_response.return_value.content = [Mock(text="HELLO")]
+    mock_client.return_value.messages.stream.return_value.text_stream = ['H', 'E', 'L', 'L', 'O']
+    return mock_client
+
+# def configure_mock_client_sync_stream(mock_client):
+#     # Create a mock stream context that behaves like the real streaming API
+#     mock_stream_context = Mock()
+#     mock_stream_context.text_stream = iter(["HEL", "LO"])  # Chunks that will yield "HELLO"
+#
+#     # Create a mock final message that will be returned by get_final_message()
+#     mock_final_message = Mock()
+#     mock_final_message.content = [Mock(text="HELLO")]
+#     mock_stream_context.get_final_message.return_value = mock_final_message
+#
+#     # Create the main stream mock that acts as a context manager
+#     # We need to use MagicMock for context manager support
+#     from unittest.mock import MagicMock
+#     mock_stream = MagicMock()
+#     mock_stream.__enter__.return_value = mock_stream_context
+#     mock_stream.__exit__.return_value = False
+#
+#     # Configure the client to return this stream
+#     mock_client.return_value.messages.stream.return_value = mock_stream
+#
+#     return mock_client
+
 class TestOther:
     def test_conversation_resume_flat(self):
         """Test Method 1: start() call without argv for bot with no fields"""
@@ -1378,9 +1419,124 @@ class TestOther:
                 mock_client.return_value.messages.create.return_value = mock_response()
         
                 b = Bot(client=mock_client())
-                conv = Conversation(b)
+                with pytest.raises(SyncAsyncMismatchError):
+                    conv = Conversation(b)
+                    await conv.astart('hello')
+                    
+                conv = Conversation(b, async_mode=True)
                 coro = conv.astart('hello')
                 return await coro
         msg = asyncio.run(do_test())
         assert robo.gettext(msg) == 'HELLO'
+    
+    def test_callbacks_sync_flat(self):
+        with patch.object(robo, '_get_client') as mock_client:
+            b = Bot(client=configure_mock_client_sync_flat(mock_client)())
+            sio = StringIO()
+            conv = Conversation(b, [])
+            def stream_finished_callback(final_message):
+                print('writing')
+                sio.write(gettext(final_message))
+            conv.register_callback('response_complete', stream_finished_callback)
+            msg = conv.resume('hello')
+            sio.seek(0)
+            assert sio.read() == 'HELLO'
+    
+    # def test_callbacks_sync_stream(self):
+    #     with patch.object(robo, '_get_client') as mock_client:
+    #         b = Bot(client=configure_mock_client_sync_stream(mock_client)())
+    #         sio = StringIO()
+    #         conv = Conversation(b, [], stream=True)
+    #
+    #         def stream_finished_callback(final_message):
+    #             print('writing')
+    #             sio.write(gettext(final_message))
+    #
+    #         conv.register_callback('response_complete', stream_finished_callback)
+    #         print('ok')
+    #
+    #         with conv.resume('hello') as stream:
+    #             print('awef')
+    #             for chunk in stream.text_stream:
+    #                 print(chunk, flush=True)
+    #                 pass
+    #
+    #         sio.seek(0)
+    #         print(sio.read())
+    #         sio.seek(0)
+    #         assert sio.read() == 'HELLO'
             
+
+from robo import *
+import asyncio
+from robo.tools import *
+from robo.testing.fakeanthropic import *
+
+class ToolTesterBot(Bot):
+    class GetWeather(Tool):
+        description = "Get weather"
+        parameter_descriptions = {
+            'location': 'the location'
+        }
+        
+        def __call__(self, location:str):
+            print('GetWeather called with', location)
+            return "Sunny, 23° celcius"
+    
+    class Calculate(Tool):
+        description = "Calculate"
+        parameter_descriptions = {
+            'expression': 'the expression'
+        }
+        
+        def __call__(self, expression:str):
+            print('Calculate called with', expression)
+            return '4'
+    
+    tools = [GetWeather, Calculate]
+
+
+
+scenarios = {
+    "test input": ["expected response"],
+    "tool test": [{
+        'type': 'tool_use',
+        'id': 'toolu_123',
+        'name': 'my_tool',
+        'input': {'param': 'value'}
+    }]
+}
+
+fake_client = lambda: FakeAnthropic(response_scenarios=scenarios)
+fake_client_async = lambda: FakeAsyncAnthropic(response_scenarios=scenarios)
+
+
+class TestFakeAnthropic:
+    def test_tooluse_sync_flat(self):
+        conv = Conversation(ToolTesterBot(client=fake_client()), [])
+        # conv.register_callback(response_complete, )
+        msg = conv.resume('calculate')
+        assert gettext(msg) == 'Tool response was:4'
+
+    def test_tooluse_sync_stream(self):
+        conv = Conversation(ToolTesterBot(client=fake_client()), [], stream=True)
+        sio = StringIO()
+        say = streamer(conv, cc=sio)
+        say('weather')
+        sio.seek(0)
+        assert sio.read() == 'Tool response was:Sunny, 23° celcius'
+
+    def test_tooluse_async_flat(self):
+        conv = Conversation(ToolTesterBot(client=fake_client_async()), [], async_mode=True)
+        coro = conv.aresume('calculate')
+        msg = asyncio.run(coro)
+        assert gettext(msg) == 'Tool response was:4'
+
+    def test_tooluse_async_stream(self):
+        conv = Conversation(ToolTesterBot(client=fake_client_async()), [], stream=True, async_mode=True)
+        sio = StringIO()
+        say = streamer_async(conv, cc=sio)
+        coro = say('weather')
+        asyncio.run(coro)
+        sio.seek(0)
+        assert sio.read() == 'Tool response was:Sunny, 23° celcius'
