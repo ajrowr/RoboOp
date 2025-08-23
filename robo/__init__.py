@@ -439,6 +439,9 @@ class Conversation(object):
         for tub in self.tool_use_blocks.pending:
             if tub.status == 'PENDING':
                 tub.response = self.bot.handle_tool_call(tub.request)
+                def callback_wrapper(callback_function):
+                    callback_function(self, (tub.request, tub.response))
+                self._execute_callbacks('tool_executed', callback_wrapper)
                 if (target := tub.response['target']) == 'model':
                     tub.status = 'READY'
                 elif target == 'client':

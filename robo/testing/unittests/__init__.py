@@ -690,6 +690,31 @@ class TestResponseCompleteCallbacks(CallbackConversationVariantTester):
         self.run_variant_tests(test_wrapper, check_successful, [_IN1])
 
 
+class TestToolExecutedCallbacks(CallbackConversationVariantTester):
+    def test_tool_executed_callback(self):
+        def test_wrapper(runner, msgs_in, **conv_args):
+            tool_req, tool_resp, conv_retained = None, None, None
+            def callback_function(conv, tub):
+                nonlocal tool_req, tool_resp, conv_retained
+                conv_retained = conv
+                tool_req, tool_resp = tub
+            conv = Conversation(ToolTesterBot(client=self.get_client(conv_args)), [], **conv_args)
+            conv.register_callback('tool_executed', callback_function)
+            runner(conv, msgs_in)
+            return tool_req, tool_resp, conv, conv_retained
+        
+        def check_successful(returned):
+            tool_req, tool_resp, conv, conv_retained = returned
+            print(tool_req)
+            print(tool_resp)
+            assert conv_retained == conv
+            assert tool_req.name == 'Calculate'
+            assert tool_resp['message'] == '4'
+            print('assertions passed')
+        
+        self.run_variant_tests(test_wrapper, check_successful, ['calculate'])
+
+
 class TestConversationStartMethods:
     """Tests the various conversation startup methods as described in the cookbook.
     Method 1: conv = Conversation() ; conv.start(usermessage) ; conv.resume(usermessage)
