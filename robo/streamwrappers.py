@@ -20,9 +20,9 @@ class StreamWrapper:
             if not self.suppress_append_accumulated:
                 self.conversation_obj.messages.append(asst_message)
             self.conversation_obj._post_stream_hook()
-            def callback_handler(callback_function):
-                callback_function(self.stream_context.get_final_message())
-            self.conversation_obj._execute_callbacks('response_complete', callback_handler)
+            def callback_wrapper(callback_function):
+                callback_function(self.conversation_obj, self.stream_context.get_final_message())
+            self.conversation_obj._execute_callbacks('response_complete', callback_wrapper)
         
         return result
     
@@ -116,10 +116,10 @@ class AsyncStreamWrapper:
             # finalmessage = await self.stream_context.get_final_message() ##
             # print(finalmessage.usage.model_dump()) ##
             await self.conversation_obj._post_stream_hook_async()
-            async def callback_handler(callback_function):
+            async def callback_wrapper(callback_function):
                 final_message = await self.stream_context.get_final_message()
-                callback_function(final_message)
-            await self.conversation_obj._aexecute_callbacks('response_complete', callback_handler)
+                callback_function(self.conversation_obj, final_message)
+            await self.conversation_obj._aexecute_callbacks('response_complete', callback_wrapper)
         
         return result
     

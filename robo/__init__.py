@@ -545,13 +545,13 @@ class Conversation(object):
     def _lookup_callbacks(self, callback_name):
         return self._callbacks_registered[callback_name]
     
-    def _execute_callbacks(self, callback_name, callback_handler):
+    def _execute_callbacks(self, callback_name, callback_wrapper):
         for registered_callback in self._lookup_callbacks(callback_name):
-            callback_handler(registered_callback)
+            callback_wrapper(registered_callback)
     
-    async def _aexecute_callbacks(self, callback_name, callback_handler):
+    async def _aexecute_callbacks(self, callback_name, callback_wrapper):
         for registered_callback in self._lookup_callbacks(callback_name):
-            await callback_handler(registered_callback)
+            await callback_wrapper(registered_callback)
     
     def prestart(self, argv=[]):
         """Initialize the conversation with template arguments.
@@ -703,9 +703,9 @@ class Conversation(object):
                 resps = self._compile_tool_responses()
                 return self._resume_flat(resps, is_tool_message=True)
         
-        def callback_handler(callback_function):
-            callback_function(message_out)
-        self._execute_callbacks('response_complete', callback_handler)
+        def callback_wrapper(callback_function):
+            callback_function(self, message_out)
+        self._execute_callbacks('response_complete', callback_wrapper)
         
         return message_out
     
@@ -841,9 +841,9 @@ class Conversation(object):
                 resps = self._compile_tool_responses()
                 return await self._aresume_flat(resps, is_tool_message=True)
         
-        def callback_handler(callback_function):
-            callback_function(message_out)
-        self._execute_callbacks('response_complete', callback_handler)
+        def callback_wrapper(callback_function):
+            callback_function(self, message_out)
+        self._execute_callbacks('response_complete', callback_wrapper)
         
         return message_out
     

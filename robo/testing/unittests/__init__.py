@@ -145,7 +145,8 @@ fake_client_async = lambda: FakeAsyncAnthropic(response_scenarios=scenarios)
 
 def make_sio_callback():
     sio = StringIO()
-    def sio_callback(message):
+    def sio_callback(conversation, message):
+        assert issubclass(type(conversation), Conversation)
         sio.write(gettext(message))
     return (sio, sio_callback)
 
