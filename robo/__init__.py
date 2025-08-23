@@ -327,20 +327,6 @@ class Conversation(object):
         else:
             return args
     
-    def register_callback(self, callback_name, callback_fn):
-        self._callbacks_registered[callback_name].append(callback_fn)
-        
-    def _lookup_callbacks(self, callback_name):
-        return self._callbacks_registered[callback_name]
-    
-    def _execute_callbacks(self, callback_name, callback_handler):
-        for registered_callback in self._lookup_callbacks(callback_name):
-            callback_handler(registered_callback)
-    
-    async def _aexecute_callbacks(self, callback_name, callback_handler):
-        for registered_callback in self._lookup_callbacks(callback_name):
-            await callback_handler(registered_callback)
-    
     @classmethod
     def _make_text_message(klass, role, content):
         return klass._make_generic_message(
@@ -513,6 +499,60 @@ class Conversation(object):
             return mymessages
         return self.messages
     
+    @classmethod
+    def _compile_user_message(klass, message, with_files=[]):
+        if with_files:
+            message_blocks = []
+            for fspec in with_files:
+                if type(fspec) is not tuple:
+                    fspec = klass._infer_filespec_from_filename(fspec)
+                message_blocks.append(
+                    klass._make_message_file_segment(fspec)
+                )
+            if message: ## Allow for messages consisting only of files
+                message_blocks.append(klass._make_message_text_segment(message))
+            message_out = klass._make_generic_message('user', message_blocks)
+        else:
+            message_out = klass._make_text_message('user', message)
+        return message_out
+
+    def _handle_canned_response(self, original_message, canned_response):
+        """Handle canned responses (works for both sync and async). If original_message
+        is None, it isn't added to the conversation history (which is useful for
+        certain types of tool calls, eg. ones where you need to send a system message 
+        to the client that might confuse the model if it became part of the chat log)."""
+        if original_message is not None:
+            self.messages.append(self._make_text_message('user', original_message))
+        
+        # The Bot.preprocess_response method should return a tuple (response, include_in_context)
+        # or just a string (defaulting to include_in_context=True)
+        if isinstance(canned_response, tuple):
+            response_text, include_in_context = canned_response
+        else:
+            response_text, include_in_context = canned_response, True
+        
+        response_obj = CannedResponse(response_text, include_in_context)
+        self.message_objects.append(response_obj)
+        
+        if include_in_context:
+            self.messages.append(self._make_text_message('assistant', response_text))
+        
+        return response_obj
+
+    def register_callback(self, callback_name, callback_fn):
+        self._callbacks_registered[callback_name].append(callback_fn)
+        
+    def _lookup_callbacks(self, callback_name):
+        return self._callbacks_registered[callback_name]
+    
+    def _execute_callbacks(self, callback_name, callback_handler):
+        for registered_callback in self._lookup_callbacks(callback_name):
+            callback_handler(registered_callback)
+    
+    async def _aexecute_callbacks(self, callback_name, callback_handler):
+        for registered_callback in self._lookup_callbacks(callback_name):
+            await callback_handler(registered_callback)
+    
     def prestart(self, argv=[]):
         """Initialize the conversation with template arguments.
         
@@ -557,167 +597,6 @@ class Conversation(object):
         self.prestart(argv)
         return self.resume(message)
 
-    async def astart(self, *args):
-        """Start a new conversation asynchronously with an initial message.
-        
-        Args:
-            *args: Either (argv, message) or just (message)
-                argv (list): Template arguments for system prompt  
-                message (str): The initial user message
-                
-        Returns:
-            The bot's response to the initial message
-            
-        Raises:
-            Exception: If conversation has already started
-            SyncAsyncMismatchError: if Conversation.is_async is not True
-        """
-        if not self.is_async:
-            raise SyncAsyncMismatchError("Async operation attempted during sync mode")
-        
-        if type(args[0]) in (list, dict):
-            argv, message = args
-        else:
-            argv, message = [], args[0]
-        if self.started:
-            raise Exception('Conversation has already started')
-        
-        self.prestart(argv)
-        return await self.aresume(message)
-
-    async def aresume(self, message, with_files=[]):
-        """Continue the conversation asynchronously with a new message.
-        
-        Args:
-            message (str): The user's message
-            
-        Returns:
-            The bot's response, which may be a model response or canned response
-        
-        Raises:
-            SyncAsyncMismatchError: if Conversation.is_async is not True
-        """
-        if not self.is_async:
-            raise SyncAsyncMismatchError("Async operation attempted during sync mode")
-        if not self.started:
-            raise Exception("Attempting to resume a conversation that has not been started")
-        # Check for canned response first
-        canned_response = self.bot.preprocess_response(message, self)
-        is_tool_message = False
-        if type(canned_response) is dict:
-            message = canned_response
-            is_tool_message = True
-        elif canned_response is not None:
-            return self._handle_canned_response(message, canned_response)
-        
-        try:
-            if self.is_streaming:
-                return await self._aresume_stream(message, is_tool_message=is_tool_message, with_files=with_files)
-            else:
-                return await self._aresume_flat(message, is_tool_message=is_tool_message, with_files=with_files)
-        except TypeError as exc:
-            if str(exc).startswith('"Could not resolve authentication method'):
-                raise Exception(f"Authentication method not valid, please ensure that one of ROBO_API_KEY_FILE or ANTHROPIC_API_KEY is set") from exc
-            else: # pragma: no cover
-                raise
-
-    def _handle_canned_response(self, original_message, canned_response):
-        """Handle canned responses (works for both sync and async). If original_message
-        is None, it isn't added to the conversation history (which is useful for
-        certain types of tool calls, eg. ones where you need to send a system message 
-        to the client that might confuse the model if it became part of the chat log)."""
-        if original_message is not None:
-            self.messages.append(self._make_text_message('user', original_message))
-        
-        # The Bot.preprocess_response method should return a tuple (response, include_in_context)
-        # or just a string (defaulting to include_in_context=True)
-        if isinstance(canned_response, tuple):
-            response_text, include_in_context = canned_response
-        else:
-            response_text, include_in_context = canned_response, True
-        
-        response_obj = CannedResponse(response_text, include_in_context)
-        self.message_objects.append(response_obj)
-        
-        if include_in_context:
-            self.messages.append(self._make_text_message('assistant', response_text))
-        
-        return response_obj
-
-    async def _aresume_stream(self, message, is_tool_message=False, with_files=[]):
-        if is_tool_message:
-            self.messages.append(message)
-        else:
-            self.messages.append(self._compile_user_message(message, with_files=with_files))
-        stream = self.bot.client.messages.stream(
-            model=self.bot.model, max_tokens=self.max_tokens,
-            temperature=self.bot.temperature, system=self.sysprompt,
-            messages=self._get_conversation_context(),
-            tools=self.bot.get_tools_schema(),
-        )
-        return STREAM_WRAPPER_CLASS_ASYNC(stream, self)
-
-    async def _aresume_flat(self, message, is_tool_message=False, with_files=[]):
-        if is_tool_message:
-            self.messages.append(message)
-        else:
-            self.messages.append(self._compile_user_message(message, with_files=with_files))
-    
-        message_out = await self.bot.client.messages.create(
-            model=self.bot.model, max_tokens=self.max_tokens,
-            temperature=self.bot.temperature, system=self.sysprompt,
-            messages=self._get_conversation_context(),
-            tools=self.bot.get_tools_schema(),
-        )
-        self.message_objects.append(message_out)
-    
-        # Process all content blocks in the response
-        accumulated_context = []
-        response_text = ""
-    
-        for contentblock in message_out.content:
-            blocktype = type(contentblock).__name__
-            if blocktype == 'ToolUseBlock':
-                treq = {
-                    'type': 'tool_use',
-                    'id': contentblock.id,
-                    'name': contentblock.name,
-                    'input': contentblock.input,
-                }
-                self._add_tool_request(treq)
-                accumulated_context.append(treq)
-            elif hasattr(contentblock, 'text'):
-                ttxt = {
-                    'type': 'text',
-                    'text': contentblock.text,
-                }
-                accumulated_context.append(ttxt)
-                response_text += contentblock.text
-            else: # pragma: no cover
-                raise Exception(f"Don't know what to do with blocktype: {blocktype}")
-    
-        # Add the assistant's response to messages
-        self.messages.append({'role': 'assistant', 'content': accumulated_context})
-    
-        # Handle tool calls if conversation is not exhausted (i.e., if there are pending tool calls)
-        if not self._is_exhausted():
-            self._handle_pending_tool_requests()
-        
-            # Check for client-targeted responses first
-            msg_out = self._handle_waiting_tool_requests()
-            if msg_out is not None:
-                return self._handle_canned_response(None, (msg_out, False))
-            else:
-                # Handle model-targeted tool responses
-                resps = self._compile_tool_responses()
-                return await self._aresume_flat(resps, is_tool_message=True)
-        
-        def callback_handler(callback_function):
-            callback_function(message_out)
-        self._execute_callbacks('response_complete', callback_handler)
-        
-        return message_out
-    
     def resume(self, message, with_files=[]):
         """Continue the conversation with a new message.
         
@@ -754,23 +633,6 @@ class Conversation(object):
                 raise Exception(f"Authentication method not valid, please ensure that one of ROBO_API_KEY_FILE or ANTHROPIC_API_KEY is set") from exc
             else: # pragma: no cover
                 raise
-
-    @classmethod
-    def _compile_user_message(klass, message, with_files=[]):
-        if with_files:
-            message_blocks = []
-            for fspec in with_files:
-                if type(fspec) is not tuple:
-                    fspec = klass._infer_filespec_from_filename(fspec)
-                message_blocks.append(
-                    klass._make_message_file_segment(fspec)
-                )
-            if message: ## Allow for messages consisting only of files
-                message_blocks.append(klass._make_message_text_segment(message))
-            message_out = klass._make_generic_message('user', message_blocks)
-        else:
-            message_out = klass._make_text_message('user', message)
-        return message_out
 
     def _resume_stream(self, message, is_tool_message=False, with_files=[]):
         if is_tool_message:
@@ -840,6 +702,144 @@ class Conversation(object):
                 # Handle model-targeted tool responses
                 resps = self._compile_tool_responses()
                 return self._resume_flat(resps, is_tool_message=True)
+        
+        def callback_handler(callback_function):
+            callback_function(message_out)
+        self._execute_callbacks('response_complete', callback_handler)
+        
+        return message_out
+    
+    async def astart(self, *args):
+        """Start a new conversation asynchronously with an initial message.
+        
+        Args:
+            *args: Either (argv, message) or just (message)
+                argv (list): Template arguments for system prompt  
+                message (str): The initial user message
+                
+        Returns:
+            The bot's response to the initial message
+            
+        Raises:
+            Exception: If conversation has already started
+            SyncAsyncMismatchError: if Conversation.is_async is not True
+        """
+        if not self.is_async:
+            raise SyncAsyncMismatchError("Async operation attempted during sync mode")
+        
+        if type(args[0]) in (list, dict):
+            argv, message = args
+        else:
+            argv, message = [], args[0]
+        if self.started:
+            raise Exception('Conversation has already started')
+        
+        self.prestart(argv)
+        return await self.aresume(message)
+
+    async def aresume(self, message, with_files=[]):
+        """Continue the conversation asynchronously with a new message.
+        
+        Args:
+            message (str): The user's message
+            
+        Returns:
+            The bot's response, which may be a model response or canned response
+        
+        Raises:
+            SyncAsyncMismatchError: if Conversation.is_async is not True
+        """
+        if not self.is_async:
+            raise SyncAsyncMismatchError("Async operation attempted during sync mode")
+        if not self.started:
+            raise Exception("Attempting to resume a conversation that has not been started")
+        # Check for canned response first
+        canned_response = self.bot.preprocess_response(message, self)
+        is_tool_message = False
+        if type(canned_response) is dict:
+            message = canned_response
+            is_tool_message = True
+        elif canned_response is not None:
+            return self._handle_canned_response(message, canned_response)
+        
+        try:
+            if self.is_streaming:
+                return await self._aresume_stream(message, is_tool_message=is_tool_message, with_files=with_files)
+            else:
+                return await self._aresume_flat(message, is_tool_message=is_tool_message, with_files=with_files)
+        except TypeError as exc:
+            if str(exc).startswith('"Could not resolve authentication method'):
+                raise Exception(f"Authentication method not valid, please ensure that one of ROBO_API_KEY_FILE or ANTHROPIC_API_KEY is set") from exc
+            else: # pragma: no cover
+                raise
+
+    async def _aresume_stream(self, message, is_tool_message=False, with_files=[]):
+        if is_tool_message:
+            self.messages.append(message)
+        else:
+            self.messages.append(self._compile_user_message(message, with_files=with_files))
+        stream = self.bot.client.messages.stream(
+            model=self.bot.model, max_tokens=self.max_tokens,
+            temperature=self.bot.temperature, system=self.sysprompt,
+            messages=self._get_conversation_context(),
+            tools=self.bot.get_tools_schema(),
+        )
+        return STREAM_WRAPPER_CLASS_ASYNC(stream, self)
+
+    async def _aresume_flat(self, message, is_tool_message=False, with_files=[]):
+        if is_tool_message:
+            self.messages.append(message)
+        else:
+            self.messages.append(self._compile_user_message(message, with_files=with_files))
+    
+        message_out = await self.bot.client.messages.create(
+            model=self.bot.model, max_tokens=self.max_tokens,
+            temperature=self.bot.temperature, system=self.sysprompt,
+            messages=self._get_conversation_context(),
+            tools=self.bot.get_tools_schema(),
+        )
+        self.message_objects.append(message_out)
+    
+        # Process all content blocks in the response
+        accumulated_context = []
+        response_text = ""
+    
+        for contentblock in message_out.content:
+            blocktype = type(contentblock).__name__
+            if blocktype == 'ToolUseBlock':
+                treq = {
+                    'type': 'tool_use',
+                    'id': contentblock.id,
+                    'name': contentblock.name,
+                    'input': contentblock.input,
+                }
+                self._add_tool_request(treq)
+                accumulated_context.append(treq)
+            elif hasattr(contentblock, 'text'):
+                ttxt = {
+                    'type': 'text',
+                    'text': contentblock.text,
+                }
+                accumulated_context.append(ttxt)
+                response_text += contentblock.text
+            else: # pragma: no cover
+                raise Exception(f"Don't know what to do with blocktype: {blocktype}")
+    
+        # Add the assistant's response to messages
+        self.messages.append({'role': 'assistant', 'content': accumulated_context})
+    
+        # Handle tool calls if conversation is not exhausted (i.e., if there are pending tool calls)
+        if not self._is_exhausted():
+            self._handle_pending_tool_requests()
+        
+            # Check for client-targeted responses first
+            msg_out = self._handle_waiting_tool_requests()
+            if msg_out is not None:
+                return self._handle_canned_response(None, (msg_out, False))
+            else:
+                # Handle model-targeted tool responses
+                resps = self._compile_tool_responses()
+                return await self._aresume_flat(resps, is_tool_message=True)
         
         def callback_handler(callback_function):
             callback_function(message_out)
