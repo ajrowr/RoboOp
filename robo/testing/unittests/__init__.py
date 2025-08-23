@@ -464,6 +464,33 @@ class TestAPIKeyAndClientGet:
             assert bot.client.api_key == 'xyzzy'
 
 
+class TestOOTools:
+    def test_tool_structure(self):
+        class MyTool1(robo.tools.Tool):
+            description = 'Test tool'
+            parameter_descriptions = {
+                'param1': 'Required string parameter',
+                'param2': 'Optional integer parameter'
+            }
+            
+            def __call__(self, param1:str, param2:int = None):
+                return {'param1_reversed': ''.join(reversed(param1)), 'param2_squared': param2 ** 2}
+            
+        assert MyTool1.get_call_schema() == {'name': 'MyTool1', 'description': 'Test tool', 
+            'input_schema': {'type': 'object', 'properties': {'param1': {'type': 'string', 
+            'description': 'Required string parameter'}, 'param2': {'type': 'number', 
+            'description': 'Optional integer parameter'}}, 'required': ['param1']}}
+        
+        assert MyTool1()(**{'param1': 'time loop', 'param2':20}) == {'param1_reversed': 'pool emit', 'param2_squared': 400}
+        
+    def test_raises_if_call_not_defined(self):
+        class MyTool1(robo.tools.Tool):
+            description = 'Test tool'
+        
+        with pytest.raises(NotImplementedError):
+            MyTool1()()
+
+
 class TestToolUse:
     def test_tooluse_sync_flat(self):
         conv = Conversation(ToolTesterBot(client=fake_client()), [])
@@ -647,6 +674,15 @@ class TestConversationStartMethods:
             assert gettext(msg1) == _OUT1
             msg2 = conv.resume(_IN2)
             assert gettext(msg2) == _OUT2
+    
+    def test_method3_sync_flat_prestart_no_argv(self):
+        with patch.object(robo, '_get_client_class') as mock_client:
+            mock_client.return_value.return_value = fake_client()
+            conv = Conversation(Bot)
+            conv.prestart()
+            assert conv.started
+            msg = conv.resume(_IN1)
+            assert gettext(msg) == _OUT1
     
     def test_method3_sync_flat_with_list(self):
         with patch.object(robo, '_get_client_class') as mock_client:

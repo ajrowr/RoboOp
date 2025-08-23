@@ -14,7 +14,7 @@ _types_map = {
 class Tool(object):
     __slots__ = ['name', 'description', 'parameter_descriptions', 'target']
     def __call__(self):
-        raise NotImplemented()
+        raise NotImplementedError("Please implement __call__ in a subclass")
     
     @classmethod
     def get_call_schema(klass):

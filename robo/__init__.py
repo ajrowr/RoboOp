@@ -513,7 +513,7 @@ class Conversation(object):
             return mymessages
         return self.messages
     
-    def prestart(self, argv):
+    def prestart(self, argv=[]):
         """Initialize the conversation with template arguments.
         
         Sets up the system prompt by substituting template variables
