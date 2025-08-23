@@ -602,34 +602,38 @@ class TestToolUse:
 class CallbackConversationVariantTester:
     
     @staticmethod
-    def _runner_sync_flat(convo, msg_in):
-        convo.resume(msg_in)
+    def _runner_sync_flat(convo, msgs_in):
+        for msg in msgs_in:
+            convo.resume(msg)
     
     @staticmethod
-    def _runner_async_flat(convo, msg_in):
-        async def resumeconvo(msg):
-            await convo.aresume(msg)
-        asyncio.run(resumeconvo(msg_in))
+    def _runner_async_flat(convo, msgs_in):
+        for msg in msgs_in:
+            async def resumeconvo(msg):
+                await convo.aresume(msg)
+            asyncio.run(resumeconvo(msg))
     
     @staticmethod
-    def _runner_sync_stream(convo, msg_in):
-        with convo.resume(msg_in) as stream:
-            for chunk in stream.text_stream:
-                pass
-    
-    @staticmethod
-    def _runner_async_stream(convo, msg_in):
-        async def resumeconvo(msg):
-            async with await convo.aresume(msg) as stream:
-                async for chunk in stream.text_stream:
+    def _runner_sync_stream(convo, msgs_in):
+        for msg in msgs_in:
+            with convo.resume(msg) as stream:
+                for chunk in stream.text_stream:
                     pass
-        asyncio.run(resumeconvo(msg_in))
     
-    def run_variant_tests(self, test_wrapper, success_check, msg_input):
-        success_check(test_wrapper(self._runner_sync_flat, msg_input))
-        success_check(test_wrapper(self._runner_async_flat, msg_input, async_mode=True))
-        success_check(test_wrapper(self._runner_sync_stream, msg_input, stream=True))
-        success_check(test_wrapper(self._runner_async_stream, msg_input, stream=True, async_mode=True))
+    @staticmethod
+    def _runner_async_stream(convo, msgs_in):
+        for msg in msgs_in:
+            async def resumeconvo(msg):
+                async with await convo.aresume(msg) as stream:
+                    async for chunk in stream.text_stream:
+                        pass
+            asyncio.run(resumeconvo(msg))
+    
+    def run_variant_tests(self, test_wrapper, success_check, msgs_input):
+        success_check(test_wrapper(self._runner_sync_flat, msgs_input))
+        success_check(test_wrapper(self._runner_async_flat, msgs_input, async_mode=True))
+        success_check(test_wrapper(self._runner_sync_stream, msgs_input, stream=True))
+        success_check(test_wrapper(self._runner_async_stream, msgs_input, stream=True, async_mode=True))
     
     @staticmethod
     def get_client(kwargs):
@@ -640,48 +644,32 @@ class CallbackConversationVariantTester:
 
 
 class TestCallbacksStructure(CallbackConversationVariantTester):
-    def test_callbacks_sync_flat(self):
-        conv = Conversation(ToolTesterBot(client=fake_client()), [])
-        sio, cb = make_sio_callback()
-        conv.register_callback('response_complete', cb)
-        conv.resume(_IN1)
-        sio.seek(0)
-        assert sio.read() == _OUT1
-
-    def test_callbacks_sync_stream(self):
-        conv = Conversation(ToolTesterBot(client=fake_client()), [], stream=True)
-        sio, cb = make_sio_callback()
-        conv.register_callback('response_complete', cb)
-        with conv.resume(_IN1) as streamwrapper:
-            for chunk in streamwrapper.text_stream:
-                pass
-        
-        sio.seek(0)
-        assert sio.read() == _OUT1
+    def test_callbacks_structure(self):
+        def test_wrapper(runner, msgs_in, **conv_args):
+            sio = StringIO()
+            conv_retained = None
+            def callback_function(conv, msg):
+                nonlocal conv_retained, sio
+                sio.write(gettext(msg))
+                conv_retained = conv
+            conv = Conversation(Bot(client=self.get_client(conv_args)), [], **conv_args)
+            conv.register_callback('response_complete', callback_function)
+            runner(conv, msgs_in)
+            return sio, conv, conv_retained
     
-    def test_callbacks_async_flat(self):
-        conv = Conversation(ToolTesterBot(client=fake_client_async()), [], async_mode=True)
-        sio, cb = make_sio_callback()
-        conv.register_callback('response_complete', cb)
-        coro = conv.aresume(_IN1)
-        msg = asyncio.run(coro)
-        sio.seek(0)
-        assert sio.read() == _OUT1
+        def check_successful(returned):
+            sio, conv, conv_retained = returned
+            sio.seek(0)
+            assert sio.read() == _OUT1
+            assert conv_retained == conv
+            print('assertions passed')
     
-    def test_callbacks_async_stream(self):
-        conv = Conversation(ToolTesterBot(client=fake_client_async()), [], stream=True, async_mode=True)
-        sio, cb = make_sio_callback()
-        conv.register_callback('response_complete', cb)
-        say = streamer_async(conv)
-        coro = say(_IN1)
-        asyncio.run(coro)
-        sio.seek(0)
-        assert sio.read() == _OUT1
+        self.run_variant_tests(test_wrapper, check_successful, [_IN1])
 
 
-class TestSpecificCallbacks(CallbackConversationVariantTester):
+class TestResponseCompleteCallbacks(CallbackConversationVariantTester):
     def test_response_complete_callback(self):
-        def test_wrapper(runner, msg_in, **conv_args):
+        def test_wrapper(runner, msgs_in, **conv_args):
             final_msg, conv_retained = None, None
             def callback_function(conv, msg):
                 nonlocal final_msg, conv_retained
@@ -689,7 +677,7 @@ class TestSpecificCallbacks(CallbackConversationVariantTester):
                 final_msg = msg
             conv = Conversation(Bot(client=self.get_client(conv_args)), [], **conv_args)
             conv.register_callback('response_complete', callback_function)
-            runner(conv, msg_in)
+            runner(conv, msgs_in)
             return final_msg, conv, conv_retained
         
         def check_successful(returned):
@@ -699,7 +687,7 @@ class TestSpecificCallbacks(CallbackConversationVariantTester):
             assert conv_retained == conv
             print('assertions passed')
         
-        self.run_variant_tests(test_wrapper, check_successful, _IN1)
+        self.run_variant_tests(test_wrapper, check_successful, [_IN1])
 
 
 class TestConversationStartMethods:
