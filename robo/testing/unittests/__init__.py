@@ -599,170 +599,6 @@ class TestToolUse:
         asyncio.run(two())
 
 
-class TestCallbacksStructure:
-    def test_callbacks_sync_flat(self):
-        conv = Conversation(ToolTesterBot(client=fake_client()), [])
-        sio, cb = make_sio_callback()
-        conv.register_callback('response_complete', cb)
-        conv.resume(_IN1)
-        sio.seek(0)
-        assert sio.read() == _OUT1
-
-    def test_callbacks_sync_stream(self):
-        conv = Conversation(ToolTesterBot(client=fake_client()), [], stream=True)
-        sio, cb = make_sio_callback()
-        conv.register_callback('response_complete', cb)
-        with conv.resume(_IN1) as streamwrapper:
-            for chunk in streamwrapper.text_stream:
-                pass
-        
-        sio.seek(0)
-        assert sio.read() == _OUT1
-    
-    def test_callbacks_async_flat(self):
-        conv = Conversation(ToolTesterBot(client=fake_client_async()), [], async_mode=True)
-        sio, cb = make_sio_callback()
-        conv.register_callback('response_complete', cb)
-        coro = conv.aresume(_IN1)
-        msg = asyncio.run(coro)
-        sio.seek(0)
-        assert sio.read() == _OUT1
-    
-    def test_callbacks_async_stream(self):
-        conv = Conversation(ToolTesterBot(client=fake_client_async()), [], stream=True, async_mode=True)
-        sio, cb = make_sio_callback()
-        conv.register_callback('response_complete', cb)
-        say = streamer_async(conv)
-        coro = say(_IN1)
-        asyncio.run(coro)
-        sio.seek(0)
-        assert sio.read() == _OUT1
-
-
-# class TestSpecificCallbacks:
-#     def test_response_complete_callback(self):
-#         final_msg, conv_retained = None, None
-#         def callback_function(conv, msg):
-#             nonlocal final_msg, conv_retained
-#             print(conv_retained, final_msg)
-#             conv_retained = conv
-#             final_msg = msg
-#         conv = Conversation(Bot(client=fake_client()), [])
-#         conv.register_callback('response_complete', callback_function)
-#         conv.resume(_IN1)
-#         print(final_msg, conv_retained)
-#         assert gettext(final_msg) == _OUT1
-#         assert issubclass(type(conv_retained), Conversation)
-#         assert conv_retained == conv
-#
-#     def test_response_complete_callback_experimental_v1(self):
-#         def test_wrapper(runner, **conv_args):
-#             if 'async_mode' in conv_args:
-#                 client = fake_client_async()
-#             else:
-#                 client = fake_client()
-#             final_msg, conv_retained = None, None
-#             def callback_function(conv, msg):
-#                 nonlocal final_msg, conv_retained
-#                 # print(conv_retained, conv, final_msg, msg, gettext(msg))
-#                 conv_retained = conv
-#                 final_msg = msg
-#             conv = Conversation(Bot(client=client), [], **conv_args)
-#             conv.register_callback('response_complete', callback_function)
-#             runner(conv)
-#             return final_msg, conv, conv_retained
-#
-#         def check_successful(returned):
-#             final_msg, conv, conv_retained = returned
-#             # print(returned)
-#             assert gettext(final_msg) == _OUT1
-#             assert issubclass(type(conv_retained), Conversation)
-#             assert conv_retained == conv
-#             print('assertions passed')
-#
-#         def runner_sync_flat(convo):
-#             convo.resume(_IN1)
-#
-#         def runner_async_flat(convo):
-#             async def resumeconvo(msg):
-#                 await convo.aresume(msg)
-#             asyncio.run(resumeconvo(_IN1))
-#
-#         def runner_sync_stream(convo):
-#             with convo.resume(_IN1) as stream:
-#                 for chunk in stream.text_stream:
-#                     pass
-#
-#         def runner_async_stream(convo):
-#             async def resumeconvo(msg):
-#                 async with await convo.aresume(msg) as stream:
-#                     async for chunk in stream.text_stream:
-#                         pass
-#             asyncio.run(resumeconvo(_IN1))
-#
-#         check_successful(test_wrapper(runner_sync_flat))
-#         check_successful(test_wrapper(runner_async_flat, async_mode=True))
-#         check_successful(test_wrapper(runner_sync_stream, stream=True))
-#         check_successful(test_wrapper(runner_async_stream, stream=True, async_mode=True))
-#
-#         raise Exception('reached end')
-#         # conv.resume(_IN1)
-#         # print(final_msg, conv_retained)
-#
-#     def test_response_complete_callback_experimental(self):
-#         def test_wrapper(runner, msg_in, **conv_args):
-#             if 'async_mode' in conv_args:
-#                 client = fake_client_async()
-#             else:
-#                 client = fake_client()
-#             final_msg, conv_retained = None, None
-#             def callback_function(conv, msg):
-#                 nonlocal final_msg, conv_retained
-#                 # print(conv_retained, conv, final_msg, msg, gettext(msg))
-#                 conv_retained = conv
-#                 final_msg = msg
-#             conv = Conversation(Bot(client=client), [], **conv_args)
-#             conv.register_callback('response_complete', callback_function)
-#             runner(conv, msg_in)
-#             return final_msg, conv, conv_retained
-#
-#         def check_successful(returned):
-#             final_msg, conv, conv_retained = returned
-#             # print(returned)
-#             assert gettext(final_msg) == _OUT1
-#             assert issubclass(type(conv_retained), Conversation)
-#             assert conv_retained == conv
-#             print('assertions passed')
-#
-#         def runner_sync_flat(convo, msg_in):
-#             convo.resume(msg_in)
-#
-#         def runner_async_flat(convo, msg_in):
-#             async def resumeconvo(msg):
-#                 await convo.aresume(msg)
-#             asyncio.run(resumeconvo(msg_in))
-#
-#         def runner_sync_stream(convo, msg_in):
-#             with convo.resume(msg_in) as stream:
-#                 for chunk in stream.text_stream:
-#                     pass
-#
-#         def runner_async_stream(convo, msg_in):
-#             async def resumeconvo(msg):
-#                 async with await convo.aresume(msg) as stream:
-#                     async for chunk in stream.text_stream:
-#                         pass
-#             asyncio.run(resumeconvo(msg_in))
-#
-#         check_successful(test_wrapper(runner_sync_flat, _IN1))
-#         check_successful(test_wrapper(runner_async_flat, _IN1, async_mode=True))
-#         check_successful(test_wrapper(runner_sync_stream, _IN1, stream=True))
-#         check_successful(test_wrapper(runner_async_stream, _IN1, stream=True, async_mode=True))
-#
-#         raise Exception('reached end')
-#         # conv.resume(_IN1)
-#         # print(final_msg, conv_retained)
-
 class CallbackConversationVariantTester:
     
     @staticmethod
@@ -802,13 +638,53 @@ class CallbackConversationVariantTester:
         else:
             return fake_client()
 
+
+class TestCallbacksStructure(CallbackConversationVariantTester):
+    def test_callbacks_sync_flat(self):
+        conv = Conversation(ToolTesterBot(client=fake_client()), [])
+        sio, cb = make_sio_callback()
+        conv.register_callback('response_complete', cb)
+        conv.resume(_IN1)
+        sio.seek(0)
+        assert sio.read() == _OUT1
+
+    def test_callbacks_sync_stream(self):
+        conv = Conversation(ToolTesterBot(client=fake_client()), [], stream=True)
+        sio, cb = make_sio_callback()
+        conv.register_callback('response_complete', cb)
+        with conv.resume(_IN1) as streamwrapper:
+            for chunk in streamwrapper.text_stream:
+                pass
+        
+        sio.seek(0)
+        assert sio.read() == _OUT1
+    
+    def test_callbacks_async_flat(self):
+        conv = Conversation(ToolTesterBot(client=fake_client_async()), [], async_mode=True)
+        sio, cb = make_sio_callback()
+        conv.register_callback('response_complete', cb)
+        coro = conv.aresume(_IN1)
+        msg = asyncio.run(coro)
+        sio.seek(0)
+        assert sio.read() == _OUT1
+    
+    def test_callbacks_async_stream(self):
+        conv = Conversation(ToolTesterBot(client=fake_client_async()), [], stream=True, async_mode=True)
+        sio, cb = make_sio_callback()
+        conv.register_callback('response_complete', cb)
+        say = streamer_async(conv)
+        coro = say(_IN1)
+        asyncio.run(coro)
+        sio.seek(0)
+        assert sio.read() == _OUT1
+
+
 class TestSpecificCallbacks(CallbackConversationVariantTester):
     def test_response_complete_callback(self):
         def test_wrapper(runner, msg_in, **conv_args):
             final_msg, conv_retained = None, None
             def callback_function(conv, msg):
                 nonlocal final_msg, conv_retained
-                # print(conv_retained, conv, final_msg, msg, gettext(msg))
                 conv_retained = conv
                 final_msg = msg
             conv = Conversation(Bot(client=self.get_client(conv_args)), [], **conv_args)
@@ -823,13 +699,7 @@ class TestSpecificCallbacks(CallbackConversationVariantTester):
             assert conv_retained == conv
             print('assertions passed')
         
-        # check_successful(test_wrapper(self._runner_sync_flat, _IN1))
-        # check_successful(test_wrapper(self._runner_async_flat, _IN1, async_mode=True))
-        # check_successful(test_wrapper(self._runner_sync_stream, _IN1, stream=True))
-        # check_successful(test_wrapper(self._runner_async_stream, _IN1, stream=True, async_mode=True))
         self.run_variant_tests(test_wrapper, check_successful, _IN1)
-        
-        # raise Exception('reached end')
 
 
 class TestConversationStartMethods:
