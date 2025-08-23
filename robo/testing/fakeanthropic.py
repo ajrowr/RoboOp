@@ -90,6 +90,9 @@ class FakeMessage:
         self.model = "claude-sonnet-4-20250514"
         self.role = "assistant"
         self.stop_reason = "end_turn"
+    
+    def __repr__(self):
+        return f'<{self.__module__}.{self.__class__.__name__}: "{self.content}">'
 
 
 class FakeStreamManager:

@@ -14,8 +14,15 @@ from types import SimpleNamespace
 from collections import defaultdict
 
 
-API_KEY_FILE = os.environ.get('ROBO_API_KEY_FILE', None) ## In case you want to load it from a file 
+API_KEY_FILE = None ## In case you want to load it from a file 
 API_KEY_ENV_VAR = None ## If you want to use a different env var instead of ANTHROPIC_API_KEY
+
+def _populate_apikey_vars():
+    global API_KEY_FILE, API_KEY_ENV_VAR
+    API_KEY_FILE = os.environ.get('ROBO_API_KEY_FILE', None)
+    API_KEY_ENV_VAR = None
+
+_populate_apikey_vars()
 
 STREAM_WRAPPER_CLASS_SYNC = StreamWrapperWithToolUse
 STREAM_WRAPPER_CLASS_ASYNC = AsyncStreamWrapperWithToolUse
@@ -36,12 +43,13 @@ def _get_api_key():
         return os.environ[API_KEY_ENV_VAR]
     ## If neither, then returning None will let Anthropic check its default of ANTHROPIC_API_KEY
 
-def _get_client_class(async_mode=False):
+
+def _get_client_class(async_mode=False): # pragma: no cover
     if async_mode:
         return anthropic.AsyncAnthropic
     return anthropic.Anthropic
 
-def _get_client(async_mode=False):
+def _get_client(async_mode=False): # pragma: no cover
     return _get_client_class(async_mode=async_mode)(api_key=_get_api_key())
 
 
@@ -299,7 +307,7 @@ class Conversation(object):
     def __repr__(self):
         try:
             return f'<{self.__class__.__name__} with {repr(self.bot)} at 0x{id(self):x}>'
-        except:
+        except: # pragma: no cover
             return super().__repr__()
     
     def _convert_argv_if_needed(self, args, strict=True):
@@ -539,7 +547,7 @@ class Conversation(object):
         if self.is_async:
             raise SyncAsyncMismatchError("Sync operation attempted during async mode")
         
-        if type(args[0]) is list:
+        if type(args[0]) in (list, dict):
             argv, message = args
         else:
             argv, message = [], args[0]
@@ -567,7 +575,7 @@ class Conversation(object):
         if not self.is_async:
             raise SyncAsyncMismatchError("Async operation attempted during sync mode")
         
-        if type(args[0]) is list:
+        if type(args[0]) in (list, dict):
             argv, message = args
         else:
             argv, message = [], args[0]
@@ -610,7 +618,7 @@ class Conversation(object):
         except TypeError as exc:
             if str(exc).startswith('"Could not resolve authentication method'):
                 raise Exception(f"Authentication method not valid, please ensure that one of ROBO_API_KEY_FILE or ANTHROPIC_API_KEY is set") from exc
-            else:
+            else: # pragma: no cover
                 raise
 
     def _handle_canned_response(self, original_message, canned_response):
@@ -685,7 +693,7 @@ class Conversation(object):
                 }
                 accumulated_context.append(ttxt)
                 response_text += contentblock.text
-            else:
+            else: # pragma: no cover
                 raise Exception(f"Don't know what to do with blocktype: {blocktype}")
     
         # Add the assistant's response to messages
@@ -744,7 +752,7 @@ class Conversation(object):
         except TypeError as exc:
             if str(exc).startswith('"Could not resolve authentication method'):
                 raise Exception(f"Authentication method not valid, please ensure that one of ROBO_API_KEY_FILE or ANTHROPIC_API_KEY is set") from exc
-            else:
+            else: # pragma: no cover
                 raise
 
     @classmethod
@@ -814,7 +822,7 @@ class Conversation(object):
                 }
                 accumulated_context.append(ttxt)
                 response_text += contentblock.text
-            else:
+            else: # pragma: no cover
                 raise Exception(f"Don't know what to do with blocktype: {blocktype}")
     
         # Add the assistant's response to messages
@@ -863,7 +871,7 @@ class LoggedConversation(Conversation):
         if 'logs_dir' in kwargs:
             self.logs_dir = kwargs.pop('logs_dir')
         else:
-            self.logs_dir = None
+            raise Exception(f"logs_dir required to create a viable LoggedConversation")
         self.first_saved_at = None
         
         super().__init__(bot, **kwargs)

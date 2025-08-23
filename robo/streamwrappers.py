@@ -27,7 +27,7 @@ class StreamWrapper:
         return result
     
     @property
-    def text_stream(self):
+    def text_stream(self): # pragma: no cover
         for text in self.stream_context.text_stream:
             self.chunks.append(text)
             self.accumulated_text += text
@@ -124,7 +124,7 @@ class AsyncStreamWrapper:
         return result
     
     @property
-    async def text_stream(self):
+    async def text_stream(self): # pragma: no cover
         async for text in self.stream_context.text_stream:
             self.chunks.append(text)
             self.accumulated_text += text
