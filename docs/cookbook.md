@@ -5,6 +5,22 @@ Welcome to the Cookbook, where you can learn by doing with concrete examples of 
 
 ***Interested in connecting RoboOp to the web with Django? Check out our new sister project, [BotBench](https://github.com/ajrowr/BotBench)!***
 
+## Table of contents
+
+[Basic concepts](#basic-concepts)
+[Setting up](#setting-up)
+[Recap](#recap) - covering concepts introduced in [README.md](../README.md)
+- [`streamer` and other convenience tools](#streamer-and-other-convenience-tools)
+- [Fields](#fields)
+- [Selecting specific models and setting output token limits](#selecting-specific-models-and-setting-output-token-limits)
+- [Different ways of setting up a Conversation](#different-ways-of-setting-up-a-conversation)
+[One-shot](#one-shot)
+[Dynamic system prompts](#dynamic-system-prompts)
+[Tool use](#tool-use)
+[File handling](#file-handling)
+[Persistable chat sessions](#persistable-chat-sessions)
+[Callbacks](#callbacks)
+
 ## Basic concepts
 
 RoboOp is designed to make building Claude-powered applications straightforward and intuitive. Whether you're creating simple chatbots or sophisticated AI agents, understanding the core concepts behind how LLMs work will help you make the most of the framework's capabilities and design better bots.
@@ -149,7 +165,7 @@ Check `robo/models.py` for the models list, or just `dir(MODELS)` will do the tr
 
 ### Different ways of setting up a Conversation
 
-There are a few different ways of setting up a `Conversation`, so you can use whichever feels most natural to you. Method 1 shows how to initiate a conversation with a bot that doesn't have any fields, and the others are roughly equivalent to each other.
+There are a few different ways of setting up a `Conversation`, so you can use whichever feels most natural to you. Method 1 shows how to initiate a conversation with a bot that doesn't have any fields, and the others are roughly equivalent to each other. Note that lists and dicts can be used interchangeably for setting field values.
 
 ```python
 # Method 1
@@ -601,6 +617,69 @@ Since 1000 is not a perfect square, its square root is also an irrational number
 
 The `LoggedConversation` automatically assigns a UUID-based `conversation_id` to track each unique conversation, which can then be used to revive the conversation at a later date.
 
-Note that unlike standard `Conversation` objects, `LoggedConversation` doesn't accept field arguments as the second argument, so you'll need to use either `loggedconversation.start([...], ...)` or `loggedconversation.prestart([...])` after initialisation. Because `prestart` returns the object, you can assign the result to a variable as shown above.
+Note that unlike standard `Conversation` objects, `LoggedConversation` doesn't accept field arguments as the second argument, so you'll need to use either `loggedconversationinstance.start([...], ...)` or `loggedconversationinstance.prestart([...])` after initialisation. Because `prestart` returns the object, you can assign the result to a variable in the form `LoggedConversation(Bot, logs_dir=chat_logs_dir).prestart()` as shown above.
+
+## Callbacks
+
+Callbacks provide a way to hook into specific events during a conversation, allowing you to execute custom code when certain things happen. This is particularly useful for logging, debugging, analytics, or triggering side effects based on conversation events.
+
+RoboOp currently supports two callback types:
+
+`response_complete`
+
+This callback is triggered when the model has finished generating a complete response (but not for streaming responses or canned responses). Your callback function signature takes the format `callback(conversation_object, message)` where `message` is an `anthropic.types.message.Message` object passed through from the Anthropic API.
+
+```python
+def log_response(conversation, message):
+    print(f"Bot '{conversation.bot.name}' generated {len(message.content)} content blocks")
+    print(f"Token usage: {message.usage}")
+
+>>> conv = Conversation(Bot, [])
+>>> conv.register_callback('response_complete', log_response)
+>>> conv.resume("Hello!")
+Hello! How can I help you today?
+Bot 'Bot' generated 1 content blocks
+Token usage: Usage(cache_creation_input_tokens=0, cache_read_input_tokens=0, input_tokens=11, 
+    output_tokens=12, server_tool_use=None, service_tier='standard')
+```
+
+`tool_executed`
+
+This callback fires whenever a execution of a tool call completes, providing access to both the tool request and response. The signature for the callback function is `callback(conversation_object, tool_data)` where `tool_data` is a tuple of `(tool_use_request, tool_response)`.
+
+```python
+from robo.tools import Tool
+import time
+
+class TimerBot(Bot):
+    sysprompt_text = "You can help users time activities. Use the timer tool when they ask."
+    
+    class StartTimer(Tool):
+        description = 'Start a timer for a specified number of seconds'
+        parameter_descriptions = {
+            'seconds': 'Number of seconds to time',
+        }
+        
+        def __call__(self, seconds: int):
+            time.sleep(seconds)
+            return f"Timer finished! {seconds} seconds have elapsed."
+    
+    tools = [StartTimer]
+
+def track_tool_usage(conversation, tool_data):
+    request, response = tool_data
+    print(f"Tool '{request.name}' was called with: {request.input}")
+    print(f"Tool returned to: {response['target']}")
+
+>>> conv = Conversation(TimerBot, [])
+>>> conv.register_callback('tool_executed', track_tool_usage)
+>>> printmsg(conv.resume("Start a 2 second timer"))
+I'll start a 2-second timer for you now.
+
+Tool 'StartTimer' was called with: {'seconds': 2}
+Tool returned to: model
+Timer finished! Your 2-second timer has completed.```
+
+Note that if you are using callbacks with a `revive()`'d `LoggedConversation`, you'll need to re-register the callbacks after reviving.
 
 # More to come, watch this space! :)
