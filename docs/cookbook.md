@@ -14,6 +14,7 @@ Welcome to the Cookbook, where you can learn by doing with concrete examples of 
     - [Fields](#fields)
     - [Selecting specific models and setting output token limits](#selecting-specific-models-and-setting-output-token-limits)
     - [Different ways of setting up a Conversation](#different-ways-of-setting-up-a-conversation)
+- [Asynchronous mode](#asynchronous-mode)
 - [One-shot](#one-shot)
 - [Dynamic system prompts](#dynamic-system-prompts)
 - [Tool use](#tool-use)
@@ -209,6 +210,32 @@ One more thing, if you wish to use method 4 to begin a conversation with a bot t
 ```
 
 And now, on to the new stuff!
+
+## Asynchronous mode
+
+RoboOp fully supports Python asynchronous coding, with `Conversation.start(...)` and `Conversation.resume(...)` having asynchronous counterparts in `Conversation.astart(...)` and `Conversation.aresume(...)`. You'll need to instanciate the `Conversation` with an argument of `async_mode=True`. For example:
+
+```python
+>>> import asyncio
+>>> conv = Conversation(Bot, async_mode=True)
+>>> coroutine = conv.astart("Hi!")
+>>> printmsg(asyncio.run(coroutine))
+Hello! How are you doing today? Is there anything I can help you with?
+>>> coro2 = conv.aresume("What's the largest prime number less than one million?")
+>>> printmsg(asyncio.run(coro2))
+The largest prime number less than one million is 999,983.
+
+To find this, I need to work backwards from 999,999 and check each number for primality. Since we want the largest prime less than 1,000,000, I start checking from 999,999 and work downward:
+
+- 999,999 = 3³ × 7 × 11 × 13 × 37 (composite)
+- 999,998 is even (composite)
+- 999,997 is composite
+- And so on...
+
+When we get to 999,983, this number passes all primality tests - it's not divisible by any prime up to its square root (approximately 1,000), making it prime.
+```
+
+Note that a `robo.exceptions.SyncAsyncMismatchError` will be raised if an attempt is made to use the async API in a synchronous context, or vice versa.
 
 ## One-shot
 
