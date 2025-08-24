@@ -7,19 +7,19 @@ Welcome to the Cookbook, where you can learn by doing with concrete examples of 
 
 ## Table of contents
 
-[Basic concepts](#basic-concepts)
-[Setting up](#setting-up)
-[Recap](#recap) - covering concepts introduced in [README.md](../README.md)
-- [`streamer` and other convenience tools](#streamer-and-other-convenience-tools)
-- [Fields](#fields)
-- [Selecting specific models and setting output token limits](#selecting-specific-models-and-setting-output-token-limits)
-- [Different ways of setting up a Conversation](#different-ways-of-setting-up-a-conversation)
-[One-shot](#one-shot)
-[Dynamic system prompts](#dynamic-system-prompts)
-[Tool use](#tool-use)
-[File handling](#file-handling)
-[Persistable chat sessions](#persistable-chat-sessions)
-[Callbacks](#callbacks)
+- [Basic concepts](#basic-concepts)
+- [Setting up](#setting-up)
+- [Recap](#recap) - covering concepts introduced in [README.md](../README.md)
+    - [`streamer` and other convenience tools](#streamer-and-other-convenience-tools)
+    - [Fields](#fields)
+    - [Selecting specific models and setting output token limits](#selecting-specific-models-and-setting-output-token-limits)
+    - [Different ways of setting up a Conversation](#different-ways-of-setting-up-a-conversation)
+- [One-shot](#one-shot)
+- [Dynamic system prompts](#dynamic-system-prompts)
+- [Tool use](#tool-use)
+- [File handling](#file-handling)
+- [Persistable chat sessions](#persistable-chat-sessions)
+- [Callbacks](#callbacks)
 
 ## Basic concepts
 
