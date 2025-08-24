@@ -194,6 +194,11 @@ Honk!
 >>> printmsg(conv3a.resume('hello'))
 Baa!
 
+# prestart() can be called with no args if the bot has no fields:
+>>> conv3b = Conversation(Bot).prestart()
+>>> printmsg(conv3b.resume('in ten words or less, what sounds does a fox make?'))
+Barks, yips, screams, chatters, and the famous "ring-ding-ding."
+
 # Method 4
 >>> conv4 = Conversation(AnimalBot, ['mouse']) # This prestarts the conversation automatically
 >>> printmsg(conv4.resume('hello'))
