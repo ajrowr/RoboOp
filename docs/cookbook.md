@@ -627,7 +627,7 @@ RoboOp currently supports two callback types:
 
 `response_complete`
 
-This callback is triggered when the model has finished generating a complete response (but not for streaming responses or canned responses). Your callback function signature takes the format `callback(conversation_object, message)` where `message` is an `anthropic.types.message.Message` object passed through from the Anthropic API.
+This callback is triggered when the model has finished generating a complete response (including for streaming responses but not for canned responses). Your callback function signature takes the format `callback(conversation_object, message)` where `message` is an `anthropic.types.message.Message` object passed through from the Anthropic API.
 
 ```python
 def log_response(conversation, message):
