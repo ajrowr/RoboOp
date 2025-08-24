@@ -716,7 +716,7 @@ class Conversation(object):
                 return self._resume_flat(resps, is_tool_message=True)
         
         def callback_wrapper(callback_function):
-            callback_function(self, message_out)
+            callback_function(self, (message_out,))
         self._execute_callbacks('response_complete', callback_wrapper)
         
         return message_out
@@ -854,7 +854,7 @@ class Conversation(object):
                 return await self._aresume_flat(resps, is_tool_message=True)
         
         def callback_wrapper(callback_function):
-            callback_function(self, message_out)
+            callback_function(self, (message_out,))
         self._execute_callbacks('response_complete', callback_wrapper)
         
         return message_out

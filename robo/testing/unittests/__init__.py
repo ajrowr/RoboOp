@@ -648,8 +648,10 @@ class TestCallbacksStructure(CallbackConversationVariantTester):
         def test_wrapper(runner, msgs_in, **conv_args):
             sio = StringIO()
             conv_retained = None
-            def callback_function(conv, msg):
+            def callback_function(conv, data_tuple):
                 nonlocal conv_retained, sio
+                assert type(data_tuple) is tuple
+                msg, = data_tuple
                 sio.write(gettext(msg))
                 conv_retained = conv
             conv = Conversation(Bot(client=self.get_client(conv_args)), [], **conv_args)
@@ -671,8 +673,10 @@ class TestResponseCompleteCallbacks(CallbackConversationVariantTester):
     def test_response_complete_callback(self):
         def test_wrapper(runner, msgs_in, **conv_args):
             final_msg, conv_retained = None, None
-            def callback_function(conv, msg):
+            def callback_function(conv, data_tuple):
                 nonlocal final_msg, conv_retained
+                assert type(data_tuple) is tuple
+                msg, = data_tuple
                 conv_retained = conv
                 final_msg = msg
             conv = Conversation(Bot(client=self.get_client(conv_args)), [], **conv_args)

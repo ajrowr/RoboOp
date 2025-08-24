@@ -174,7 +174,8 @@ There are a few different ways of setting up a `Conversation`, so you can use wh
 >>> printmsg(conv1.start('hello')) # If the bot doesn't have any fields that need values
 Hello! How are you doing today? Is there anything I can help you with?
 >>> printmsg(conv1.resume('hello'))
-Hello again! I'm here if you'd like to chat about something or if there's anything specific you'd like help with. What's on your mind?
+Hello again! I'm here if you'd like to chat about something or if there's anything specific 
+you'd like help with. What's on your mind?
 
 # Method 2
 >>> conv2 = Conversation(AnimalBot)
@@ -657,19 +658,29 @@ Note that unlike standard `Conversation` objects, `LoggedConversation` doesn't a
 
 Callbacks provide a way to hook into specific events during a conversation, allowing you to execute custom code when certain things happen. This is particularly useful for logging, debugging, analytics, or triggering side effects based on conversation events.
 
+The fundamental signature for a callback function is always of this form:
+
+```python
+def your_callback_function(conversation_object, data_tuple):
+    ...
+```
+
+Where `conversation_object` is the `Conversation` that the callback was registered on, and the specifics of `data_tuple` vary by the specific callback type.
+
 RoboOp currently supports two callback types:
 
 `response_complete`
 
-This callback is triggered when the model has finished generating a complete response (including for streaming responses but not for canned responses). Your callback function signature takes the format `callback(conversation_object, message)` where `message` is an `anthropic.types.message.Message` object passed through from the Anthropic API.
+This callback is triggered when the model has finished generating a complete response (including for streaming responses but not for canned responses). The `data_tuple` contains an `anthropic.types.message.Message` object passed through from the Anthropic API.
 
 ```python
-def log_response(conversation, message):
+def log_response_callback(conversation, data_tuple):
+    message,  = data_tuple
     print(f"Bot '{conversation.bot.name}' generated {len(message.content)} content blocks")
     print(f"Token usage: {message.usage}")
 
 >>> conv = Conversation(Bot, [])
->>> conv.register_callback('response_complete', log_response)
+>>> conv.register_callback('response_complete', log_response_callback)
 >>> conv.resume("Hello!")
 Hello! How can I help you today?
 Bot 'Bot' generated 1 content blocks
@@ -679,7 +690,7 @@ Token usage: Usage(cache_creation_input_tokens=0, cache_read_input_tokens=0, inp
 
 `tool_executed`
 
-This callback fires whenever a execution of a tool call completes, providing access to both the tool request and response. The signature for the callback function is `callback(conversation_object, tool_data)` where `tool_data` is a tuple of `(tool_use_request, tool_response)`.
+This callback fires whenever a execution of a tool call completes, providing access to both the tool request and response. The `data_tuple` contains `tool_use_request` (the request from the model for the tool use) and `tool_response` (the response from the tool).
 
 ```python
 from robo.tools import Tool
@@ -700,13 +711,13 @@ class TimerBot(Bot):
     
     tools = [StartTimer]
 
-def track_tool_usage(conversation, tool_data):
-    request, response = tool_data
+def track_tool_usage_callback(conversation, data_tuple):
+    request, response = data_tuple
     print(f"Tool '{request.name}' was called with: {request.input}")
     print(f"Tool returned to: {response['target']}")
 
 >>> conv = Conversation(TimerBot, [])
->>> conv.register_callback('tool_executed', track_tool_usage)
+>>> conv.register_callback('tool_executed', track_tool_usage_callback)
 >>> printmsg(conv.resume("Start a 2 second timer"))
 I'll start a 2-second timer for you now.
 
