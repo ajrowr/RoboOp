@@ -13,6 +13,15 @@ import types
 from types import SimpleNamespace
 from collections import defaultdict
 
+from typing import TypeVar, Self, Iterator, Generator, Callable, Any
+
+ConversationType = TypeVar('ConversationType', bound='Conversation')
+AnthropicMessageType = TypeVar('AnthropicMessageType', bound='anthropic.types.message.Message')
+CannedResponseType = TypeVar('CannedResponseType', bound='CannedResponse')
+StreamWrapperType = TypeVar('StreamWrapperType', bound='StreamWrapper')
+StreamWrapperAsyncType = TypeVar('StreamWrapperAsyncType', bound='AsyncStreamWrapper')
+BotType = TypeVar('BotType', bound='Bot')
+
 
 API_KEY_FILE = None ## In case you want to load it from a file 
 API_KEY_ENV_VAR = None ## If you want to use a different env var instead of ANTHROPIC_API_KEY
@@ -88,7 +97,7 @@ class Bot(object):
         else:
             return super().__repr__()
     
-    def sysprompt_generate(self):
+    def sysprompt_generate(self) -> str | dict:
         """Generate a system prompt dynamically as an alternative to static text.
         
         Override this method to create structured system prompts or prompts that
@@ -104,7 +113,7 @@ class Bot(object):
         raise NotImplementedError("This method is not implemented")
     
     @classmethod
-    def get_tools_schema(klass):
+    def get_tools_schema(klass) -> list:
         """Return the schema describing tools available to this bot.
         
         Override this method to define tools that the bot can use during conversations.
@@ -127,7 +136,7 @@ class Bot(object):
         else:
             return []
     
-    def handle_tool_call(self, tooluseblock):
+    def handle_tool_call(self, tooluseblock:dict | SimpleNamespace) -> dict:
         """Execute a tool call based on the provided tool use block. Looks for a function to
         handle the block, having the format:
             def tool_<tooluseblock.name>(self, paramname1=None, paramname2=None, ...)
@@ -164,7 +173,7 @@ class Bot(object):
             return tool(**tooluseblock.input)
     
     @property
-    def sysprompt_clean(self):
+    def sysprompt_clean(self) -> str | dict:
         try:
             return self.sysprompt_generate()
         except NotImplementedError:
@@ -176,7 +185,7 @@ class Bot(object):
         else:
             return ''
     
-    def preprocess_response(self, message_text, conversation):
+    def preprocess_response(self, message_text:str, conversation:ConversationType) -> None | dict | str | tuple:
         """Hook to intercept and potentially modify messages before sending to the model.
         
         Override this method to implement custom message handling, canned responses,
@@ -194,7 +203,7 @@ class Bot(object):
         """
         return None
     
-    def sysprompt_vec(self, argv):
+    def sysprompt_vec(self, argv:list) -> str | dict:
         """Generate a system prompt with template variable substitution.
         
         Replaces template variables in the format {{field}} with values from argv
@@ -229,7 +238,7 @@ class Bot(object):
         self.client = client
     
     @classmethod
-    def with_api_key(klass, api_key, async_mode=False):
+    def with_api_key(klass, api_key:str, async_mode:bool=False) -> Self:
         client = _get_client_class(async_mode)(api_key=api_key)
         return klass(client)
 
@@ -240,7 +249,7 @@ class CannedResponse:
     Used to return static responses while maintaining compatibility with
     the conversation flow and streaming interfaces.
     """
-    def __init__(self, text, include_in_context=True):
+    def __init__(self, text:str, include_in_context:bool=True):
         self.text = text
         self.include_in_context = include_in_context
         # Mock the structure of an API response
@@ -262,7 +271,7 @@ class CannedResponse:
         return False
     
     @property
-    def text_stream(self):
+    def text_stream(self) -> Iterator[str]:
         """Yield the entire text as a single chunk for streaming compatibility"""
         yield self.text
 
@@ -278,7 +287,7 @@ class Conversation(object):
                 'is_streaming', 'started', 'is_async', 'oneshot', 'cache_user_prompt', 
                 'soft_started', 'tool_use_blocks'] + \
                 ['_callbacks_registered']
-    def __init__(self, bot, argv=None, stream=False, async_mode=False, soft_start=None, cache_user_prompt=False):
+    def __init__(self, bot:BotType, argv:list|dict=None, stream:bool=False, async_mode:bool=False, soft_start:bool=None, cache_user_prompt:bool=False):
         self.is_async = async_mode
         if type(bot) is type:
             self.bot = bot(async_mode=async_mode)
@@ -542,7 +551,7 @@ class Conversation(object):
         
         return response_obj
 
-    def register_callback(self, callback_name, callback_fn):
+    def register_callback(self, callback_name:str, callback_fn:Callable[[ConversationType, tuple], None]) -> None:
         self._callbacks_registered[callback_name].append(callback_fn)
         
     def _lookup_callbacks(self, callback_name):
@@ -556,7 +565,7 @@ class Conversation(object):
         for registered_callback in self._lookup_callbacks(callback_name):
             await callback_wrapper(registered_callback)
     
-    def prestart(self, argv=[]):
+    def prestart(self, argv:list=[]) -> Self:
         """Initialize the conversation with template arguments.
         
         Sets up the system prompt by substituting template variables
@@ -572,7 +581,7 @@ class Conversation(object):
         self.started = True
         return self
     
-    def start(self, *args):
+    def start(self, *args:list) -> AnthropicMessageType|CannedResponseType|StreamWrapperType:
         """Start a new conversation with an initial message.
         
         Args:
@@ -600,7 +609,7 @@ class Conversation(object):
         self.prestart(argv)
         return self.resume(message)
 
-    def resume(self, message, with_files=[]):
+    def resume(self, message:str, with_files:list=[]) -> AnthropicMessageType|CannedResponseType|StreamWrapperType:
         """Continue the conversation with a new message.
         
         Args:
@@ -712,7 +721,7 @@ class Conversation(object):
         
         return message_out
     
-    async def astart(self, *args):
+    async def astart(self, *args:list) -> AnthropicMessageType|CannedResponseType|StreamWrapperAsyncType:
         """Start a new conversation asynchronously with an initial message.
         
         Args:
@@ -740,7 +749,7 @@ class Conversation(object):
         self.prestart(argv)
         return await self.aresume(message)
 
-    async def aresume(self, message, with_files=[]):
+    async def aresume(self, message:str, with_files:list=[]) -> AnthropicMessageType|CannedResponseType|StreamWrapperAsyncType:
         """Continue the conversation asynchronously with a new message.
         
         Args:
@@ -900,12 +909,12 @@ class LoggedConversation(Conversation):
                     'messages': self.messages
                 }, logfile, indent=4)
     
-    def resume(self, message):
+    def resume(self, message:str) -> AnthropicMessageType|CannedResponseType|StreamWrapperType:
         resp = super().resume(message)
         self._write_log()
         return resp
     
-    async def aresume(self, message):
+    async def aresume(self, message:str) -> AnthropicMessageType|CannedResponseType|StreamWrapperAsyncType:
         resp = await super().aresume(message)
         self._write_log()
         return resp
@@ -917,7 +926,7 @@ class LoggedConversation(Conversation):
         self._write_log()
     
     @classmethod
-    def revive(klass, bot, conversation_id, logs_dir, **kwargs):
+    def revive(klass, bot:BotType, conversation_id:str, logs_dir:str|Path, **kwargs) -> Self:
         """Restore a previously logged conversation from disk.
         
         Args:
