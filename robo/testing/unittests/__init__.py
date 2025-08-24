@@ -42,6 +42,68 @@ class ToolTesterBot(Bot):
     tools = [GetWeather, Calculate]
 
 
+class TimerBot(Bot):
+    sysprompt_text = "You can help users time activities. Use the timer tool when they ask."
+    
+    class StartTimer(Tool):
+        description = 'Start a timer for a specified number of seconds'
+        parameter_descriptions = {
+            'seconds': 'Number of seconds to time',
+        }
+        
+        def call_sync(self, seconds: int):
+            import time
+            time.sleep(seconds)
+            return f"Synchronous timer finished! {seconds} seconds have elapsed."
+        
+        async def call_async(self, seconds: int):
+            await asyncio.sleep(seconds)
+            return f"Asynchronous timer finished! {seconds} seconds have elapsed."
+    
+    tools = [StartTimer]
+
+
+class TestAsyncToolCalls:
+    def test_async_tool_defs(self):
+        class TestTool(Tool):
+            parameter_descriptions = {
+                'numeric': 'An integer number',
+                'characters': 'A string',
+            }
+            description = 'A tool'
+        
+        correct_tool_schema = {'name': 'MyTool', 'description': 'A tool', 'input_schema': {'type': 'object', 'properties': {'numeric': {'type': 'number', 'description': 'An integer number'}, 'characters': {'type': 'string', 'description': 'A string'}}, 'required': ['numeric', 'characters']}}
+        
+        class Bot1(Bot):
+            class MyTool(TestTool):
+                def __call__(self, numeric:int, characters:str):
+                    return str(numeric) + characters
+        
+        assert Bot1.MyTool.get_call_schema() == correct_tool_schema
+
+        class Bot2(Bot):
+            class MyTool(TestTool):
+                def call_sync(self, numeric:int, characters:str):
+                    pass
+        
+        assert Bot2.MyTool.get_call_schema() == correct_tool_schema
+
+        class Bot3(Bot):
+            class MyTool(TestTool):
+                async def call_async(self, numeric:int, characters:str):
+                    pass
+        
+        assert Bot3.MyTool.get_call_schema() == correct_tool_schema
+        
+        assert asyncio.run(Bot1.MyTool().call_async(numeric=1, characters='a')) == '1a'
+    
+    def test_async_tool_calls(self):
+        tub = {'id': 'tu_12345', 'name': 'StartTimer', 'input': {'seconds': 0.01}}
+        assert TimerBot().handle_tool_call(tub)['message'].startswith('Synchronous timer finished!')
+        coro = TimerBot().ahandle_tool_call(tub)
+        assert asyncio.run(coro)['message'].startswith('Asynchronous timer finished!')
+
+
 class ToolTesterBotOldStyle(Bot):
     def get_tools_schema(self):
         return [

@@ -13,25 +13,37 @@ _types_map = {
 
 class Tool(object):
     __slots__ = ['name', 'description', 'parameter_descriptions', 'target']
-    def __call__(self):
+    def __call__(self, *args, **kwargs):
         raise NotImplementedError("Please implement __call__ in a subclass")
+    
+    def call_sync(self, *args, **kwargs):
+        return self.__call__(*args, **kwargs)
+    
+    async def call_async(self, *args, **kwargs):
+        return self.__call__(*args, **kwargs)
     
     @classmethod
     def get_call_schema(klass):
         input_schema_properties = {}
         required = []
-        sig = inspect.signature(klass.__call__)
-        for key, param in sig.parameters.items():
-            attribs = {}
-            if key == 'self':
-                continue
-            attribs = {
-                'type': _types_map[param.annotation],
-                'description': klass.parameter_descriptions[key]
-            }
-            if param.default is inspect._empty:
-                required.append(key)
-            input_schema_properties[key] = attribs
+        for callname in ['__call__', 'call_sync', 'call_async']:
+            sig = inspect.signature(getattr(klass, callname))
+            for key, param in sig.parameters.items():
+                if param.name in ['args', 'kwargs']:
+                    break ## go to next signature since this appears to be a passthru
+                attribs = {}
+                if key == 'self':
+                    continue
+                attribs = {
+                    'type': _types_map[param.annotation],
+                    'description': klass.parameter_descriptions[key]
+                }
+                if param.default is inspect._empty:
+                    required.append(key)
+                input_schema_properties[key] = attribs
+            if input_schema_properties:
+                break
+        
         return {
             'name': klass.name if hasattr(klass, 'name') and type(klass.name) is str else klass.__name__,
             'description': klass.description,

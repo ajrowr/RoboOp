@@ -136,6 +136,25 @@ class Bot(object):
         else:
             return []
     
+    def _configure_tool_call(self, tooluseblock):
+        if type(tooluseblock) is dict:
+            tooluseblock = SimpleNamespace(**tooluseblock)
+        for toolfnname_candidate in [f'tools_{tooluseblock.name}', tooluseblock.name]:
+            tool = getattr(self, toolfnname_candidate, None)
+            if tool:
+                break
+        if tool is None:
+            raise Exception(f'Tool function not found: tools_{tooluseblock.name}')
+        
+        if type(tool) is type:
+            target = getattr(tool, 'target', None)
+            if target is None or type(target) is types.MemberDescriptorType:
+                target = 'model'
+        else:
+            target = None
+        
+        return (tooluseblock, tool, target)
+    
     def handle_tool_call(self, tooluseblock:dict | SimpleNamespace) -> dict:
         """Execute a tool call based on the provided tool use block. Looks for a function to
         handle the block, having the format:
@@ -156,21 +175,18 @@ class Bot(object):
         Raises:
             Exception: If the requested tool function is not found
         """
-        if type(tooluseblock) is dict:
-            tooluseblock = SimpleNamespace(**tooluseblock)
-        for toolfnname_candidate in [f'tools_{tooluseblock.name}', tooluseblock.name]:
-            tool = getattr(self, toolfnname_candidate, None)
-            if tool:
-                break
-        if tool is None:
-            raise Exception(f'Tool function not found: tools_{tooluseblock.name}')
-        if type(tool) is type:
-            target = getattr(tool, 'target', None)
-            if target is None or type(target) is types.MemberDescriptorType:
-                target = 'model'
-            return {'target': target, 'message': tool()(**tooluseblock.input)}
-        else:
+        tooluseblock, tool, target = self._configure_tool_call(tooluseblock)
+        if target is None:
             return tool(**tooluseblock.input)
+        else:
+            return {'target': target, 'message': tool().call_sync(**tooluseblock.input)}
+    
+    async def ahandle_tool_call(self, tooluseblock:dict | SimpleNamespace) -> dict:
+        tooluseblock, tool, target = self._configure_tool_call(tooluseblock)
+        if target is None:
+            return tool(**tooluseblock.input)
+        else:
+            return {'target': target, 'message': await tool().call_async(**tooluseblock.input)}
     
     @property
     def sysprompt_clean(self) -> str | dict:
