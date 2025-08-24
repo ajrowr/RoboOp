@@ -225,17 +225,19 @@ Hello! How are you doing today? Is there anything I can help you with?
 >>> printmsg(asyncio.run(coro2))
 The largest prime number less than one million is 999,983.
 
-To find this, I need to work backwards from 999,999 and check each number for primality. Since we want the largest prime less than 1,000,000, I start checking from 999,999 and work downward:
+To find this, I need to work backwards from 999,999 and check each number for primality. Since we want the 
+largest prime less than 1,000,000, I start checking from 999,999 and work downward:
 
 - 999,999 = 3³ × 7 × 11 × 13 × 37 (composite)
 - 999,998 is even (composite)
 - 999,997 is composite
 - And so on...
 
-When we get to 999,983, this number passes all primality tests - it's not divisible by any prime up to its square root (approximately 1,000), making it prime.
+When we get to 999,983, this number passes all primality tests - it's not divisible by any prime up to its 
+square root (approximately 1,000), making it prime.
 ```
 
-Note that a `robo.exceptions.SyncAsyncMismatchError` will be raised if an attempt is made to use the async API in a synchronous context, or vice versa.
+Note that a `robo.exceptions.SyncAsyncMismatchError` will be raised if an attempt is made to use the async API of a synchronous `Conversation`, or vice versa.
 
 ## One-shot
 
@@ -615,12 +617,12 @@ Note that in some cases, inferring the MIME type from the response may not be re
 
 ## Persistable chat sessions
 
-To facilitate resumability of conversations, there's a specialised `Conversation` subclass - `LoggedConversation` - which serialises conversations to disk after each message, and can load them back in as needed. 
+To facilitate resumability of conversations, there's a specialised `Conversation` subclass - `LoggedConversation` - which serialises conversations to disk after each message, and can load them back in as needed to be picked up right where they left off.
 
 ```python
 >>> from robo import *
 >>> chat_logs_dir = '/path/to/chatlog_dir/'
->>> lconv = LoggedConversation(Bot, logs_dir=chat_logs_dir).prestart([])
+>>> lconv = LoggedConversation(Bot, logs_dir=chat_logs_dir).prestart()
 >>> printmsg(lconv.resume("""What's the square root of 10?"""))
 The square root of 10 is approximately 3.162.
 
@@ -705,7 +707,8 @@ I'll start a 2-second timer for you now.
 
 Tool 'StartTimer' was called with: {'seconds': 2}
 Tool returned to: model
-Timer finished! Your 2-second timer has completed.```
+Timer finished! Your 2-second timer has completed.
+```
 
 Note that if you are using callbacks with a `revive()`'d `LoggedConversation`, you'll need to re-register the callbacks after reviving.
 
