@@ -1,6 +1,6 @@
 
 from robo import *
-# from . import testbots
+from . import testbots
 import asyncio
 
 class BaseTester(object):
@@ -78,7 +78,7 @@ class AsyncStreamTester(BaseTester):
 
 
 def tester_variants():
-    for klass in [SyncFlatTester, SyncStreamTester, AsyncFlatTester, AsyncStreamTester]:
+    for klass in [SyncStreamTester, SyncFlatTester, AsyncStreamTester, AsyncFlatTester]:
         yield klass
 
 
@@ -101,3 +101,4 @@ def scenario2():
         print(f'\n\n --- {tklass.__name__} ---')
         tester.say("I'm planning a trip from New York to Los Angeles. Can you help me compare the weather conditions in both cities and then calculate the best route between them?")
         
+scenarios = [scenario1, scenario2]

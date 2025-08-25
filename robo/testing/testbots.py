@@ -1,6 +1,4 @@
 
-import requests
-
 from robo import *
 from robo.tools import Tool
 
@@ -103,6 +101,7 @@ class FetchAndAnalyseBot(Bot):
             'url': 'The URL to fetch',
         }
         def __call__(self, url:str):
+            import requests
             print(f"\n[[Fetching URL: {url}]]")
             pagetext = requests.get(url).text
             return pagetext
