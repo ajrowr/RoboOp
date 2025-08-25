@@ -6,6 +6,7 @@ import anthropic
 from unittest.mock import Mock, patch, AsyncMock, mock_open
 import contextlib
 import tempfile
+from datetime import datetime
 
 import robo
 from robo import *
@@ -51,16 +52,31 @@ class TimerBot(Bot):
             'seconds': 'Number of seconds to time',
         }
         
-        def call_sync(self, seconds: int):
+        def call_sync(self, seconds: float):
             import time
             time.sleep(seconds)
             return f"Synchronous timer finished! {seconds} seconds have elapsed."
         
-        async def call_async(self, seconds: int):
+        async def call_async(self, seconds: float):
             await asyncio.sleep(seconds)
             return f"Asynchronous timer finished! {seconds} seconds have elapsed."
     
     tools = [StartTimer]
+    
+    test_scenario = {
+        'tool test': [{
+            'type': 'tool_use',
+            'id': 'toolu_98765',
+            'name': 'StartTimer',
+            'input': {'seconds': 0.2}
+        }],
+        'tool test 1s': [{
+            'type': 'tool_use',
+            'id': 'toolu_98765',
+            'name': 'StartTimer',
+            'input': {'seconds': 1.0}
+        }]
+    }
 
 
 class TestAsyncToolCalls:
@@ -102,6 +118,21 @@ class TestAsyncToolCalls:
         assert TimerBot().handle_tool_call(tub)['message'].startswith('Synchronous timer finished!')
         coro = TimerBot().ahandle_tool_call(tub)
         assert asyncio.run(coro)['message'].startswith('Asynchronous timer finished!')
+    
+    def test_concurrent_tool_calls(self):
+        async def testset(n):
+            coroutines = []
+            for i in range(n):
+                myconv = Conversation(TimerBot(client=FakeAsyncAnthropic(response_scenarios=TimerBot.test_scenario)), [], async_mode=True)
+                coroutines.append(myconv.aresume('tool test'))
+
+            g = await asyncio.gather(*coroutines)
+            return list(map(gettext, g))
+        d0 = datetime.now()
+        ts = asyncio.run(testset(100))
+        d1 = datetime.now()
+        assert len(ts) == 100
+        assert (d1 - d0).total_seconds() < 1
 
 
 class ToolTesterBotOldStyle(Bot):
@@ -703,6 +734,31 @@ class CallbackConversationVariantTester:
             return fake_client_async()
         else:
             return fake_client()
+
+
+class TestSyncAsyncToolUse(CallbackConversationVariantTester):
+    @staticmethod
+    def get_client(kwargs):
+        if 'async_mode' in kwargs:
+            return FakeAsyncAnthropic(response_scenarios=TimerBot.test_scenario)
+        else:
+            return FakeAnthropic(response_scenarios=TimerBot.test_scenario)
+
+    def test_sync_async_tool_use(self):
+        def test_wrapper(runner, msgs_in, **conv_args):
+            conv = Conversation(TimerBot(client=self.get_client(conv_args)), [], **conv_args)
+            runner(conv, msgs_in)
+            return (conv,)
+        
+        def check_successful(returned):
+            conv, = returned
+            messagetext = conv.messages[-1]['content'][0]['text']
+            if conv.is_async:
+                assert 'Asynchronous timer' in messagetext
+            else:
+                assert 'Synchronous timer' in messagetext
+        
+        self.run_variant_tests(test_wrapper, check_successful, ['tool test'])
 
 
 class TestCallbacksStructure(CallbackConversationVariantTester):

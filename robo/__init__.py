@@ -472,6 +472,18 @@ class Conversation(object):
                 elif target == 'client':
                     tub.status = 'WAITING'
     
+    async def _ahandle_pending_tool_requests(self):
+        for tub in self.tool_use_blocks.pending:
+            if tub.status == 'PENDING':
+                tub.response = await self.bot.ahandle_tool_call(tub.request)
+                def callback_wrapper(callback_function):
+                    callback_function(self, (tub.request, tub.response))
+                self._execute_callbacks('tool_executed', callback_wrapper)
+                if (target := tub.response['target']) == 'model':
+                    tub.status = 'READY'
+                elif target == 'client':
+                    tub.status = 'WAITING'
+    
     def _handle_waiting_tool_requests(self):
         """Handle requests that are in 'WAITING' state, ie. that have target "client" but haven't sent
         their message yet.
@@ -858,7 +870,7 @@ class Conversation(object):
     
         # Handle tool calls if conversation is not exhausted (i.e., if there are pending tool calls)
         if not self._is_exhausted():
-            self._handle_pending_tool_requests()
+            await self._ahandle_pending_tool_requests()
         
             # Check for client-targeted responses first
             msg_out = self._handle_waiting_tool_requests()

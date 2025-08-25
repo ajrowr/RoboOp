@@ -171,7 +171,7 @@ class AsyncStreamWrapperWithToolUse(AsyncStreamWrapper):
             self.accumulated_text_bypass = True
     
             if not conv._is_exhausted():
-                conv._handle_pending_tool_requests()
+                await conv._ahandle_pending_tool_requests()
                 msg_out = conv._handle_waiting_tool_requests()
                 if msg_out is not None:
                     resp = conv._handle_canned_response(None, (msg_out, False))

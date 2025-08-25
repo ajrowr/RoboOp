@@ -18,6 +18,7 @@ Welcome to the Cookbook, where you can learn by doing with concrete examples of 
 - [One-shot](#one-shot)
 - [Dynamic system prompts](#dynamic-system-prompts)
 - [Tool use](#tool-use)
+    - [Asynchronous tools](#asynchronous-tools)
 - [File handling](#file-handling)
 - [Persistable chat sessions](#persistable-chat-sessions)
 - [Callbacks](#callbacks)
@@ -529,6 +530,45 @@ Note the use of Python type hinting to specify the types of the function paramet
 
 (Note that object-oriented tool definitions are quite new and somewhat experimental; if you need finer-grained control over tool schema generation, you can override `get_tools_schema()` in a subclass of `Bot`.)
 
+### Asynchronous tools
+
+If your bot may be operating in an asychronous environment, it's a good idea to implement both synchronous and asynchronous tool call handlers, particularly if your tool call may for some reason take more than a tiny fraction of a second:
+
+```python
+from robo.tools import Tool
+import asyncio
+
+class TimerBot(Bot):
+    sysprompt_text = "You can help users time activities. Use the timer tool when they ask. After 
+    the time has elapsed, inform the user whether a synchronous or asynchronous timer was used."
+    
+    class StartTimer(Tool):
+        description = 'Start a timer for a specified number of seconds'
+        parameter_descriptions = {
+            'seconds': 'Number of seconds to time',
+        }
+        
+        def call_sync(self, seconds: float):
+            import time
+            time.sleep(seconds)
+            return f"Synchronous timer finished! {seconds} seconds have elapsed."
+        
+        async def call_async(self, seconds: float):
+            await asyncio.sleep(seconds)
+            return f"Asynchronous timer finished! {seconds} seconds have elapsed."
+    
+    tools = [StartTimer]
+
+>>> conv = Conversation(TimerBot, [])
+>>> printmsg(conv.resume('five second timer please'))
+The timer has finished! 5 seconds have elapsed. This was a synchronous timer, meaning it completed in real-time.
+>>> conv = Conversation(TimerBot, [], async_mode=True)
+>>> printmsg(asyncio.run(conv.aresume('seven second timer please')))
+Time's up! Your 7-second timer has finished. This was an asynchronous timer, meaning it ran in the background and completed automatically.
+```
+
+Note the use of `call_sync` and `call_async` instead of `__call__`. It's not a good idea to mix these notations - if using tool calls in synchronous mode meets your needs, it's best to stick to the `__call__` notation (since if `call_sync` and `call_async` are not provided, RoboOp will automatically fall back to `__call__`). If you decide to add async support later, you can simply rename `__call__` to `call_sync` before adding your `call_async` implementation.
+
 ## File handling
 
 There are many scenarios in which it is useful to include files alongside your textual prompts. RoboOp makes this straightforward with flexible handling of both files and raw file data.
@@ -694,36 +734,49 @@ This callback fires whenever a execution of a tool call completes, providing acc
 
 ```python
 from robo.tools import Tool
-import time
 
-class TimerBot(Bot):
-    sysprompt_text = "You can help users time activities. Use the timer tool when they ask."
+class CalculatorBot(Bot):
+    sysprompt_text = "You can help users with basic math calculations. Use the appropriate tools when they ask for arithmetic operations."
     
-    class StartTimer(Tool):
-        description = 'Start a timer for a specified number of seconds'
+    class Add(Tool):
+        description = 'Add two numbers together'
         parameter_descriptions = {
-            'seconds': 'Number of seconds to time',
+            'a': 'First number to add',
+            'b': 'Second number to add',
         }
         
-        def __call__(self, seconds: int):
-            time.sleep(seconds)
-            return f"Timer finished! {seconds} seconds have elapsed."
+        def __call__(self, a: float, b: float):
+            result = a + b
+            return f"The sum of {a} and {b} is {result}"
     
-    tools = [StartTimer]
+    class Multiply(Tool):
+        description = 'Multiply two numbers'
+        parameter_descriptions = {
+            'x': 'First number to multiply',
+            'y': 'Second number to multiply',
+        }
+        
+        def __call__(self, x: float, y: float):
+            result = x * y
+            return f"The product of {x} and {y} is {result}"
+    
+    tools = [Add, Multiply]
 
 def track_tool_usage_callback(conversation, data_tuple):
     request, response = data_tuple
-    print(f"Tool '{request.name}' was called with: {request.input}")
-    print(f"Tool returned to: {response['target']}")
+    print(f"[Tool '{request.name}' was called with: {request.input}]")
+    print(f"[Tool returned to: {response['target']}]")
 
->>> conv = Conversation(TimerBot, [])
+>>> conv = Conversation(CalculatorBot, [])
 >>> conv.register_callback('tool_executed', track_tool_usage_callback)
->>> printmsg(conv.resume("Start a 2 second timer"))
-I'll start a 2-second timer for you now.
-
-Tool 'StartTimer' was called with: {'seconds': 2}
-Tool returned to: model
-Timer finished! Your 2-second timer has completed.
+>>> printmsg(conv.resume("What's 15 plus 27?"))
+[Tool 'Add' was called with: {'a': 15, 'b': 27}]
+[Tool returned to: model]
+15 plus 27 equals 42.
+>>> printmsg(conv.resume("What about seven sixes?"))
+[Tool 'Multiply' was called with: {'x': 7, 'y': 6}]
+[Tool returned to: model]
+Seven sixes equals 42.
 ```
 
 Note that if you are using callbacks with a `revive()`'d `LoggedConversation`, you'll need to re-register the callbacks after reviving.
