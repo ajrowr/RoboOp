@@ -43,6 +43,55 @@ class ToolTesterBot(Bot):
     tools = [GetWeather, Calculate]
 
 
+class TimeWeatherLocationTestBot(Bot):
+    class GetUserLocation(Tool):
+        description = """Get the user's location."""
+        
+        def __call__(self):
+            return "Auckland, New Zealand"
+    
+    class GetLocationWeather(Tool):
+        description = """Get the weather for the named location."""
+        
+        def __call__(self, location:str):
+            return "Sunny, 23°"
+        
+        parameter_descriptions = {
+            'location': "The location to fetch weather data for"
+        }
+    
+    class GetLocationTime(Tool):
+        description = """Get the current time for the named location."""
+        def __call__(self, location:str):
+            from datetime import datetime
+            return str(datetime.now())
+        
+        parameter_descriptions = {
+            'location': "The location to fetch weather data for"
+        }
+    
+    tools = [GetUserLocation, GetLocationWeather, GetLocationTime]
+    
+    test_scenario = {
+        'tool test': [
+            {
+                'type': 'tool_use',
+                'id': 'toolu_00001',
+                'name': 'GetUserLocation',
+                'input': {}
+            },
+            {
+                'type': 'tool_use',
+                'id': 'toolu_00002',
+                'name': 'GetLocationWeather',
+                'input': {'location': 'San Francisco'}
+            },
+        
+        ]
+    }
+    
+
+
 class TimerBot(Bot):
     sysprompt_text = "You can help users time activities. Use the timer tool when they ask."
     
@@ -242,6 +291,14 @@ def make_sio_callback():
         assert issubclass(type(conversation), Conversation)
         sio.write(gettext(message))
     return (sio, sio_callback)
+
+
+class TestMisc:
+    def test_count_tokens(self):
+        conv = Conversation(Bot, [])
+        tcount = conv.count_tokens('hello everybody')
+        assert tcount.input_tokens < 15 and tcount.input_tokens > 5
+        assert len(conv.messages) == 0
 
 
 class TestLoggedConversation:
@@ -590,7 +647,8 @@ class TestToolUse:
         conv = Conversation(ToolTesterBot(client=fake_client()), [])
         # conv.register_callback(response_complete, )
         msg = conv.resume('calculate')
-        assert gettext(msg) == 'Tool response was:4'
+        printmsg(msg)
+        assert gettext(msg) == '''Tool response was:['4']'''
 
     def test_tooluse_sync_stream(self):
         bot = ToolTesterBot(client=fake_client())
@@ -600,13 +658,15 @@ class TestToolUse:
         say = streamer(conv, cc=sio)
         say('weather')
         sio.seek(0)
-        assert sio.read() == 'Tool response was:Sunny, 23° celcius'
+        msgtext = sio.read()
+        assert msgtext == '''Tool response was:['Sunny, 23° celcius']'''
 
     def test_tooluse_async_flat(self):
         conv = Conversation(ToolTesterBot(client=fake_client_async()), [], async_mode=True)
         coro = conv.aresume('calculate')
         msg = asyncio.run(coro)
-        assert gettext(msg) == 'Tool response was:4'
+        print(gettext(msg))
+        assert gettext(msg) == '''Tool response was:['4']'''
 
     def test_tooluse_async_stream(self):
         conv = Conversation(ToolTesterBot(client=fake_client_async()), [], stream=True, async_mode=True)
@@ -615,7 +675,7 @@ class TestToolUse:
         coro = say('weather')
         asyncio.run(coro)
         sio.seek(0)
-        assert sio.read() == 'Tool response was:Sunny, 23° celcius'
+        assert sio.read() == """Tool response was:['Sunny, 23° celcius']"""
     
     def test_tooluse_old_style(self):
         bot = ToolTesterBotOldStyle()
@@ -635,10 +695,12 @@ class TestToolUse:
         tb = ClientToolTestBot(client=FakeAnthropic(response_scenarios=scenario))
         conv = Conversation(tb, [])
         msg = conv.resume('navigate me')
+        printmsg(msg)
         assert type(msg) is robo.CannedResponse
         assert gettext(msg) == '\n@@@@NAVIGATE /xyz/xyz/'
         msg2 = conv.resume('@@@@RECONNECT')
-        assert gettext(msg2) == 'Tool response was:@@@@RECONNECT'
+        printmsg(msg2)
+        assert gettext(msg2) == '''Tool response was:['@@@@RECONNECT']'''
         
         # async flat
         tb = ClientToolTestBot(client=FakeAsyncAnthropic(response_scenarios=scenario))
@@ -647,8 +709,7 @@ class TestToolUse:
         assert type(msg) is robo.CannedResponse
         assert gettext(msg) == '\n@@@@NAVIGATE /xyz/xyz/'
         msg2 = asyncio.run(conv.aresume('@@@@RECONNECT'))
-        assert gettext(msg2) == 'Tool response was:@@@@RECONNECT'
-        
+        assert gettext(msg2) == """Tool response was:['@@@@RECONNECT']"""
         
         # sync stream
         tb = ClientToolTestBot(client=FakeAnthropic(response_scenarios=scenario))
@@ -665,7 +726,7 @@ class TestToolUse:
             for chunk in stream.text_stream:
                 print(chunk)
                 accum += chunk
-        assert accum == 'Tool response was:@@@@RECONNECT'
+        assert accum == """Tool response was:['@@@@RECONNECT']"""
         
         # async stream
         tb = ClientToolTestBot(client=FakeAsyncAnthropic(response_scenarios=scenario))
@@ -685,9 +746,9 @@ class TestToolUse:
             accum = ''
             async with await conv.aresume('@@@@RECONNECT') as stream:
                 async for chunk in stream.text_stream:
-                    print(chunk)
+                    print(chunk, end=' ')
                     accum += chunk
-            assert accum == 'Tool response was:@@@@RECONNECT'
+            assert accum == """Tool response was:['@@@@RECONNECT']"""
         
         asyncio.run(two())
 
@@ -734,6 +795,30 @@ class CallbackConversationVariantTester:
             return fake_client_async()
         else:
             return fake_client()
+
+
+class TestMoreToolUse(CallbackConversationVariantTester):
+    @staticmethod
+    def get_client(kwargs):
+        if 'async_mode' in kwargs:
+            return FakeAsyncAnthropic(response_scenarios=TimeWeatherLocationTestBot.test_scenario)
+        else:
+            return FakeAnthropic(response_scenarios=TimeWeatherLocationTestBot.test_scenario)
+    
+    def test_tooluse_multiple_sequential_and_parallel(self):
+        def test_wrapper(runner, msgs_in, **conv_args):
+            conv = Conversation(TimeWeatherLocationTestBot(client=self.get_client(conv_args)), [], **conv_args)
+            runner(conv, msgs_in)
+            return (conv,)
+        
+        def check_successful(returned):
+            conv, = returned
+            print(conv.messages)
+            assert conv.messages[-1]['content'][0]['text'] == \
+                "Tool response was:['Auckland, New Zealand', 'Sunny, 23°']"
+            
+        
+        self.run_variant_tests(test_wrapper, check_successful, ['tool test'])
 
 
 class TestSyncAsyncToolUse(CallbackConversationVariantTester):

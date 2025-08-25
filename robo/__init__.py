@@ -593,6 +593,18 @@ class Conversation(object):
         for registered_callback in self._lookup_callbacks(callback_name):
             await callback_wrapper(registered_callback)
     
+    def count_tokens(self, message:str, with_files:list=[]):
+        compiled_messages = self._get_conversation_context() + [
+            self._compile_user_message(message, with_files=with_files)
+        ]
+        config = self._configure_for_message()
+        
+        return self.bot.client.messages.count_tokens(
+            model = config['model'],
+            system = config['system'],
+            messages = compiled_messages
+        )
+    
     def prestart(self, argv:list=[]) -> Self:
         """Initialize the conversation with template arguments.
         
@@ -673,7 +685,16 @@ class Conversation(object):
                 raise Exception(f"Authentication method not valid, please ensure that one of ROBO_API_KEY_FILE or ANTHROPIC_API_KEY is set") from exc
             else: # pragma: no cover
                 raise
-
+    
+    def _configure_for_message(self):
+        return dict(
+            model=self.bot.model, 
+            max_tokens=self.max_tokens,
+            temperature=self.bot.temperature, 
+            system=self.sysprompt,
+            tools=self.bot.get_tools_schema()
+        )
+    
     def _resume_stream(self, message, is_tool_message=False, with_files=[]):
         if is_tool_message:
             self.messages.append(message)
@@ -681,10 +702,7 @@ class Conversation(object):
             self.messages.append(self._compile_user_message(message, with_files=with_files))
         
         stream = self.bot.client.messages.stream(
-            model=self.bot.model, max_tokens=self.max_tokens,
-            temperature=self.bot.temperature, system=self.sysprompt,
-            messages=self._get_conversation_context(),
-            tools=self.bot.get_tools_schema(),
+            **(self._configure_for_message() | {'messages': self._get_conversation_context()})
         )
         return STREAM_WRAPPER_CLASS_SYNC(stream, self)
 
@@ -695,10 +713,7 @@ class Conversation(object):
             self.messages.append(self._compile_user_message(message, with_files=with_files))
     
         message_out = self.bot.client.messages.create(
-            model=self.bot.model, max_tokens=self.max_tokens,
-            temperature=self.bot.temperature, system=self.sysprompt,
-            messages=self._get_conversation_context(),
-            tools=self.bot.get_tools_schema(),
+            **(self._configure_for_message() | {'messages': self._get_conversation_context()})
         )
         self.message_objects.append(message_out)
     
@@ -819,10 +834,7 @@ class Conversation(object):
         else:
             self.messages.append(self._compile_user_message(message, with_files=with_files))
         stream = self.bot.client.messages.stream(
-            model=self.bot.model, max_tokens=self.max_tokens,
-            temperature=self.bot.temperature, system=self.sysprompt,
-            messages=self._get_conversation_context(),
-            tools=self.bot.get_tools_schema(),
+            **(self._configure_for_message() | {'messages': self._get_conversation_context()})
         )
         return STREAM_WRAPPER_CLASS_ASYNC(stream, self)
 
@@ -833,10 +845,7 @@ class Conversation(object):
             self.messages.append(self._compile_user_message(message, with_files=with_files))
     
         message_out = await self.bot.client.messages.create(
-            model=self.bot.model, max_tokens=self.max_tokens,
-            temperature=self.bot.temperature, system=self.sysprompt,
-            messages=self._get_conversation_context(),
-            tools=self.bot.get_tools_schema(),
+            **(self._configure_for_message() | {'messages': self._get_conversation_context()})
         )
         self.message_objects.append(message_out)
     

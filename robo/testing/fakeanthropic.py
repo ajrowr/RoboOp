@@ -247,23 +247,25 @@ class FakeMessages:
         self.call_count += 1
         
         # Generate response based on the last user message
-        user_message = ""
+        user_message_parts = []
         is_tool_response = False
         for msg in reversed(messages):
             if msg.get('role') == 'user':
                 if isinstance(msg.get('content'), str):
-                    user_message = msg['content']
+                    user_message_parts.append(msg['content'])
                 elif isinstance(msg.get('content'), list):
                     for block in msg['content']:
                         if block.get('type') == 'tool_result':
-                            user_message = block.get('content', '')
+                            user_message_parts.append(block.get('content', ''))
                             is_tool_response = True
-                            break
                         elif block.get('type') == 'text':
-                            user_message = block.get('text', '')
-                            break
+                            user_message_parts.append(block.get('text', ''))
                 break
         
+        if not is_tool_response:
+            user_message = ' '.join(user_message_parts)
+        else:
+            user_message = user_message_parts
         response_content = self._generate_response(user_message, tools, is_tool_response)
         content_blocks = []
         
@@ -282,23 +284,25 @@ class FakeMessages:
         self.call_count += 1
         
         # Generate response based on the last user message
-        user_message = ""
+        user_message_parts = []
         is_tool_response = False
         for msg in reversed(messages):
             if msg.get('role') == 'user':
                 if isinstance(msg.get('content'), str):
-                    user_message = msg['content']
+                    user_message_parts.append(msg['content'])
                 elif isinstance(msg.get('content'), list):
                     for block in msg['content']:
                         if block.get('type') == 'tool_result':
-                            user_message = block.get('content', '')
+                            user_message_parts.append(block.get('content', ''))
                             is_tool_response = True
-                            break
                         elif block.get('type') == 'text':
-                            user_message = block.get('text', '')
-                            break
+                            user_message_parts.append(block.get('text', ''))
                 break
         
+        if not is_tool_response:
+            user_message = ' '.join(user_message_parts)
+        else:
+            user_message = user_message_parts
         response_content = self._generate_response(user_message, tools, is_tool_response)
         return FakeStreamManager(response_content)
     
@@ -306,15 +310,17 @@ class FakeMessages:
         """Generate response content based on user message and available tools"""
         
         # Check for custom scenarios first
-        if user_message in self.response_scenarios:
-            return self.response_scenarios[user_message]
+        if type(user_message) is str:
+            if user_message in self.response_scenarios:
+                return self.response_scenarios[user_message]
+                
+        if is_tool_response:
+            return [f"Tool response was:{str(user_message)}"]
         
         # Simple keyword-based responses
         user_lower = user_message.lower()
         
-        if is_tool_response:
-            return [f"Tool response was:{user_message}"]
-        elif 'hello' in user_lower or 'hi ' in user_lower:
+        if 'hello' in user_lower or 'hi ' in user_lower:
             return ["Hello! How can I help you today?"]
         elif 'weather' in user_lower and tools:
             # Check if there's a weather tool
@@ -356,23 +362,25 @@ class FakeAsyncMessages:
         self.call_count += 1
         
         # Generate response based on the last user message
-        user_message = ""
+        user_message_parts = []
         is_tool_response = False
         for msg in reversed(messages):
             if msg.get('role') == 'user':
                 if isinstance(msg.get('content'), str):
-                    user_message = msg['content']
+                    user_message_parts.append(msg['content'])
                 elif isinstance(msg.get('content'), list):
                     for block in msg['content']:
                         if block.get('type') == 'tool_result':
-                            user_message = block.get('content', '')
+                            user_message_parts.append(block.get('content', ''))
                             is_tool_response = True
-                            break
                         elif block.get('type') == 'text':
-                            user_message = block.get('text', '')
-                            break
+                            user_message_parts.append(block.get('text', ''))
                 break
         
+        if not is_tool_response:
+            user_message = ' '.join(user_message_parts)
+        else:
+            user_message = user_message_parts
         response_content = self._generate_response(user_message, tools, is_tool_response)
         content_blocks = []
         
@@ -391,23 +399,25 @@ class FakeAsyncMessages:
         self.call_count += 1
         
         # Generate response based on the last user message
-        user_message = ""
+        user_message_parts = []
         is_tool_response = False
         for msg in reversed(messages):
             if msg.get('role') == 'user':
                 if isinstance(msg.get('content'), str):
-                    user_message = msg['content']
+                    user_message_parts.append(msg['content'])
                 elif isinstance(msg.get('content'), list):
                     for block in msg['content']:
                         if block.get('type') == 'tool_result':
-                            user_message = block.get('content', '')
+                            user_message_parts.append(block.get('content', ''))
                             is_tool_response = True
-                            break
                         elif block.get('type') == 'text':
-                            user_message = block.get('text', '')
-                            break
+                            user_message_parts.append(block.get('text', ''))
                 break
         
+        if not is_tool_response:
+            user_message = ' '.join(user_message_parts)
+        else:
+            user_message = user_message_parts
         response_content = self._generate_response(user_message, tools, is_tool_response)
         return FakeAsyncStreamManager(response_content)
     
@@ -415,15 +425,17 @@ class FakeAsyncMessages:
         """Generate response content based on user message and available tools"""
         
         # Check for custom scenarios first
-        if user_message in self.response_scenarios:
-            return self.response_scenarios[user_message]
+        if type(user_message) is str:
+            if user_message in self.response_scenarios:
+                return self.response_scenarios[user_message]
+                
+        if is_tool_response:
+            return [f"Tool response was:{str(user_message)}"]
         
         # Simple keyword-based responses
         user_lower = user_message.lower()
         
-        if is_tool_response:
-            return [f"Tool response was:{user_message}"]
-        elif 'hello' in user_lower or 'hi ' in user_lower:
+        if 'hello' in user_lower or 'hi ' in user_lower:
             return ["Hello! How can I help you today?"]
         elif 'weather' in user_lower and tools:
             # Check if there's a weather tool

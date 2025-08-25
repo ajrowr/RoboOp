@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 MODELS = SimpleNamespace(
     # Claude 4 Models (Latest Generation)
+    CLAUDE_4_1_OPUS = 'claude-opus-4-1-20250805',
     CLAUDE_4_OPUS = "claude-opus-4-20250514",
     CLAUDE_4_SONNET = "claude-sonnet-4-20250514",
     
