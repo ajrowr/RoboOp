@@ -300,10 +300,10 @@ class Conversation(object):
     asynchronous operation modes.
     """
     __slots__ = ['messages', 'bot', 'sysprompt', 'argv', 'max_tokens', 'message_objects', 
-                'is_streaming', 'started', 'is_async', 'oneshot', 'cache_user_prompt', 
+                'is_streaming', 'started', 'is_async', 'oneshot',
                 'soft_started', 'tool_use_blocks'] + \
-                ['_callbacks_registered']
-    def __init__(self, bot:BotType, argv:list|dict=None, stream:bool=False, async_mode:bool=False, soft_start:bool=None, cache_user_prompt:bool=False):
+                ['_callbacks_registered', '_message_cache_checkpoints']
+    def __init__(self, bot:BotType, argv:list|dict=None, stream:bool=False, async_mode:bool=False, soft_start:bool=None):
         self.is_async = async_mode
         if type(bot) is type:
             self.bot = bot(async_mode=async_mode)
@@ -314,7 +314,7 @@ class Conversation(object):
         self.messages = []
         self.message_objects = []
         self._callbacks_registered = defaultdict(list)
-        self.cache_user_prompt = cache_user_prompt
+        self._message_cache_checkpoints = []
         self.tool_use_blocks = SimpleNamespace(pending=[], resolved=[])
         if (soft_start or (self.bot.soft_start and not soft_start is False)) and self.bot.welcome_message:
             self.messages.append(self._make_text_message('assistant', self.bot.welcome_message))
@@ -530,13 +530,16 @@ class Conversation(object):
     
     def _get_conversation_context(self):
         """Oneshot is for bots that don't need conversational context"""
+        checkpoints = self._message_cache_checkpoints
         if self.oneshot:
             return [self.messages[-1]]
-        elif self.cache_user_prompt:
+        elif len(checkpoints) > 0:
             from copy import deepcopy
             mymessages = deepcopy(self.messages)
-            mymessages[-1]['content'][-1]['cache_control'] = {'type': 'ephemeral'}
+            for idx in checkpoints:
+                mymessages[idx]['content'][-1]['cache_control'] = {'type': 'ephemeral'}
             return mymessages
+        
         return self.messages
     
     @classmethod
@@ -578,7 +581,7 @@ class Conversation(object):
             self.messages.append(self._make_text_message('assistant', response_text))
         
         return response_obj
-
+    
     def register_callback(self, callback_name:str, callback_fn:Callable[[ConversationType, tuple], None]) -> None:
         self._callbacks_registered[callback_name].append(callback_fn)
         
@@ -649,7 +652,7 @@ class Conversation(object):
         self.prestart(argv)
         return self.resume(message)
 
-    def resume(self, message:str, with_files:list=[]) -> AnthropicMessageType|CannedResponseType|StreamWrapperType:
+    def resume(self, message:str, set_cache_checkpoint:bool=False, with_files:list=[]) -> AnthropicMessageType|CannedResponseType|StreamWrapperType:
         """Continue the conversation with a new message.
         
         Args:
@@ -677,9 +680,11 @@ class Conversation(object):
         
         try:
             if self.is_streaming:
-                return self._resume_stream(message, is_tool_message=is_tool_message, with_files=with_files)
+                return self._resume_stream(message, is_tool_message=is_tool_message,
+                         set_cache_checkpoint=set_cache_checkpoint, with_files=with_files)
             else:
-                return self._resume_flat(message, is_tool_message=is_tool_message, with_files=with_files)
+                return self._resume_flat(message, is_tool_message=is_tool_message,
+                         set_cache_checkpoint=set_cache_checkpoint, with_files=with_files)
         except TypeError as exc:
             if str(exc).startswith('"Could not resolve authentication method'):
                 raise Exception(f"Authentication method not valid, please ensure that one of ROBO_API_KEY_FILE or ANTHROPIC_API_KEY is set") from exc
@@ -695,7 +700,9 @@ class Conversation(object):
             tools=self.bot.get_tools_schema()
         )
     
-    def _resume_stream(self, message, is_tool_message=False, with_files=[]):
+    def _resume_stream(self, message, is_tool_message=False, set_cache_checkpoint=False, with_files=[]):
+        if set_cache_checkpoint:
+            self._message_cache_checkpoints.append(len(self.messages))
         if is_tool_message:
             self.messages.append(message)
         else:
@@ -706,7 +713,9 @@ class Conversation(object):
         )
         return STREAM_WRAPPER_CLASS_SYNC(stream, self)
 
-    def _resume_flat(self, message, is_tool_message=False, with_files=[]):
+    def _resume_flat(self, message, is_tool_message=False, set_cache_checkpoint=False, with_files=[]):
+        if set_cache_checkpoint:
+            self._message_cache_checkpoints.append(len(self.messages))
         if is_tool_message:
             self.messages.append(message)
         else:
@@ -792,7 +801,7 @@ class Conversation(object):
         self.prestart(argv)
         return await self.aresume(message)
 
-    async def aresume(self, message:str, with_files:list=[]) -> AnthropicMessageType|CannedResponseType|StreamWrapperAsyncType:
+    async def aresume(self, message:str, set_cache_checkpoint=False, with_files:list=[]) -> AnthropicMessageType|CannedResponseType|StreamWrapperAsyncType:
         """Continue the conversation asynchronously with a new message.
         
         Args:
@@ -819,16 +828,18 @@ class Conversation(object):
         
         try:
             if self.is_streaming:
-                return await self._aresume_stream(message, is_tool_message=is_tool_message, with_files=with_files)
+                return await self._aresume_stream(message, is_tool_message=is_tool_message, set_cache_checkpoint=set_cache_checkpoint, with_files=with_files)
             else:
-                return await self._aresume_flat(message, is_tool_message=is_tool_message, with_files=with_files)
+                return await self._aresume_flat(message, is_tool_message=is_tool_message, set_cache_checkpoint=set_cache_checkpoint, with_files=with_files)
         except TypeError as exc:
             if str(exc).startswith('"Could not resolve authentication method'):
                 raise Exception(f"Authentication method not valid, please ensure that one of ROBO_API_KEY_FILE or ANTHROPIC_API_KEY is set") from exc
             else: # pragma: no cover
                 raise
 
-    async def _aresume_stream(self, message, is_tool_message=False, with_files=[]):
+    async def _aresume_stream(self, message, is_tool_message=False, set_cache_checkpoint=False, with_files=[]):
+        if set_cache_checkpoint:
+            self._message_cache_checkpoints.append(len(self.messages))
         if is_tool_message:
             self.messages.append(message)
         else:
@@ -838,7 +849,9 @@ class Conversation(object):
         )
         return STREAM_WRAPPER_CLASS_ASYNC(stream, self)
 
-    async def _aresume_flat(self, message, is_tool_message=False, with_files=[]):
+    async def _aresume_flat(self, message, is_tool_message=False, set_cache_checkpoint=False, with_files=[]):
+        if set_cache_checkpoint:
+            self._message_cache_checkpoints.append(len(self.messages))
         if is_tool_message:
             self.messages.append(message)
         else:

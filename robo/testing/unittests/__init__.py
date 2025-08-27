@@ -569,12 +569,14 @@ class TestConversationContext:
         assert len(conv._get_conversation_context()) == 1
     
     def test_cache_user_prompt(self):
-        c = Conversation(Bot(client=fake_client()), [], cache_user_prompt=True)
+        c = Conversation(Bot(client=fake_client()), [])
         c.resume('test input')
-        c.resume('test input')
-        assert c._get_conversation_context()[-1]['content'][0]['cache_control']['type'] == 'ephemeral'
+        c.resume('test input 2', set_cache_checkpoint=True)
+        c.resume('test input 3')
+        
+        assert c._get_conversation_context()[2]['content'][0]['cache_control']['type'] == 'ephemeral'
         with pytest.raises(KeyError, match='cache_control'):
-            c._get_conversation_context()[-3]['content'][0]['cache_control']['type'] == 'ephemeral'
+            c._get_conversation_context()[4]['content'][0]['cache_control']['type'] == 'ephemeral'
 
 
 class TestClassBasicAttributes:
@@ -758,30 +760,51 @@ class CallbackConversationVariantTester:
     @staticmethod
     def _runner_sync_flat(convo, msgs_in):
         for msg in msgs_in:
-            convo.resume(msg)
+            if type(msg) is tuple:
+                msg_text, msg_kwargs = msg
+            else:
+                msg_text, msg_kwargs = msg, {}
+                
+            convo.resume(msg_text, **msg_kwargs)
     
     @staticmethod
     def _runner_async_flat(convo, msgs_in):
         for msg in msgs_in:
-            async def resumeconvo(msg):
-                await convo.aresume(msg)
-            asyncio.run(resumeconvo(msg))
+            if type(msg) is tuple:
+                msg_text, msg_kwargs = msg
+            else:
+                msg_text, msg_kwargs = msg, {}
+            
+            async def resumeconvo(msg_text, msg_kwargs):
+                print(msg_text, msg_kwargs)
+                await convo.aresume(msg_text, **msg_kwargs)
+            asyncio.run(resumeconvo(msg_text, msg_kwargs))
     
     @staticmethod
     def _runner_sync_stream(convo, msgs_in):
         for msg in msgs_in:
-            with convo.resume(msg) as stream:
+            if type(msg) is tuple:
+                msg_text, msg_kwargs = msg
+            else:
+                msg_text, msg_kwargs = msg, {}
+            
+            with convo.resume(msg_text, **msg_kwargs) as stream:
                 for chunk in stream.text_stream:
                     pass
     
     @staticmethod
     def _runner_async_stream(convo, msgs_in):
         for msg in msgs_in:
-            async def resumeconvo(msg):
-                async with await convo.aresume(msg) as stream:
+            if type(msg) is tuple:
+                msg_text, msg_kwargs = msg
+            else:
+                msg_text, msg_kwargs = msg, {}
+            
+            async def resumeconvo(msg_text, msg_kwargs):
+                async with await convo.aresume(msg_text, **msg_kwargs) as stream:
                     async for chunk in stream.text_stream:
                         pass
-            asyncio.run(resumeconvo(msg))
+            asyncio.run(resumeconvo(msg_text, msg_kwargs))
     
     def run_variant_tests(self, test_wrapper, success_check, msgs_input):
         success_check(test_wrapper(self._runner_sync_flat, msgs_input))
@@ -921,6 +944,30 @@ class TestToolExecutedCallbacks(CallbackConversationVariantTester):
         
         self.run_variant_tests(test_wrapper, check_successful, ['calculate'])
 
+
+class TestMessagesCaching(CallbackConversationVariantTester):
+    def test_cache_user_prompt(self):
+        def test_wrapper(runner, msgs_in, **conv_args):
+            conv = Conversation(Bot(client=self.get_client(conv_args)), [], **conv_args)
+            print('---', runner, '---')
+            runner(conv, msgs_in)
+            return conv,
+        
+        def check_successful(returned):
+            conv, = returned
+            print(json.dumps(conv._get_conversation_context(), indent=4))
+            assert conv._get_conversation_context()[2]['content'][0]['cache_control']['type'] == 'ephemeral'
+            with pytest.raises(KeyError, match='cache_control'):
+                conv._get_conversation_context()[4]['content'][0]['cache_control']['type'] == 'ephemeral'
+            assert conv._get_conversation_context()[6]['content'][0]['cache_control']['type'] == 'ephemeral'
+        
+        self.run_variant_tests(test_wrapper, check_successful, [
+            'test input', 
+            ('test input 2', {'set_cache_checkpoint':True}), 
+            'test input 3',
+            ('test input 4', {'set_cache_checkpoint':True}), 
+            'test input 5',
+        ])
 
 class TestBaseStreamWrappers:
     """Because the ToolUse StreamWrapper variants are used by default, some lines of code get overlooked
