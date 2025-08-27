@@ -787,7 +787,7 @@ Note that if you are using callbacks with a `revive()`'d `LoggedConversation`, y
 
 ## Message caching
 
-As well as caching system prompts, the Claude API also supports caching of the messages in a conversation, which can lead to a significant saving of tokens (as well as improvements in processing speed), particularly when a conversation is lengthy or contains files. You can use set a cache checkpoint by passing `set_cache_checkpoint` as an argument to `resume()` or `aresume()`, in which case everything up to and including the checkpoint will be cached. As with system prompt caching (discussed earlier), you may use a total of four checkpoints in a single conversation.
+As well as caching system prompts, the Claude API also supports caching of the messages in a conversation, which can lead to a significant saving of tokens (as well as improvements in processing speed), particularly when a conversation is lengthy or includes files. You can set a cache checkpoint by passing `set_cache_checkpoint` as an argument to `resume()` or `aresume()`, in which case everything up to and including the checkpoint will be cached. As with system prompt caching (discussed earlier), you may use up to four checkpoints in a single conversation.
 
 ```python
 def show_usage_callback(conversation, data):
