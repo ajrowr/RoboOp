@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "RoboOp"
-version = "0.6.3"
+version = "0.6.4"
 requires-python = ">=3.10"
 authors = [{name = "Alan Rowarth", email = "alan@codex.cx"}]
 description = "A microframework designed to get you started quickly building Claude-powered agents, assistants and applications with the Anthropic API."
@@ -44,8 +44,6 @@ classifiers = [
     
     # Programming Language
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
