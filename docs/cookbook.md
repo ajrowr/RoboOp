@@ -16,12 +16,13 @@ Welcome to the Cookbook, where you can learn by doing with concrete examples of 
     - [Different ways of setting up a Conversation](#different-ways-of-setting-up-a-conversation)
 - [Asynchronous mode](#asynchronous-mode)
 - [One-shot](#one-shot)
-- [Dynamic system prompts](#dynamic-system-prompts)
+- [Dynamic system prompts and system prompt caching](#dynamic-system-prompts-and-system-prompt-caching)
 - [Tool use](#tool-use)
     - [Asynchronous tools](#asynchronous-tools)
 - [File handling](#file-handling)
 - [Persistable chat sessions](#persistable-chat-sessions)
 - [Callbacks](#callbacks)
+- [Message caching](#message-caching)
 
 ## Basic concepts
 
@@ -291,7 +292,7 @@ class ReviewAssessmentBot(Bot):
 {'stars_count': 1}
 ```
 
-## Dynamic system prompts
+## Dynamic system prompts and system prompt caching
 
 So far we have seen system prompts that consist of inline text, which is fine for simple bots, but for more sophisticated applications you may want more flexibility about how to specify your sysprompts.
 
@@ -783,5 +784,67 @@ Seven sixes equals 42.
 ```
 
 Note that if you are using callbacks with a `revive()`'d `LoggedConversation`, you'll need to re-register the callbacks after reviving.
+
+## Message caching
+
+As well as caching system prompts, the Claude API also supports caching of the messages in a conversation, which can lead to a significant saving of tokens (as well as improvements in processing speed), particularly when a conversation is lengthy or contains files. You can use set a cache checkpoint by passing `set_cache_checkpoint` as an argument to `resume()` or `aresume()`, in which case everything up to and including the checkpoint will be cached. As with system prompt caching (discussed earlier), you may use a total of four checkpoints in a single conversation.
+
+```python
+def show_usage_callback(conversation, data):
+    msg, = data
+    sep = '\n' + ('- ' * 20) + '\n'
+    print(sep + '\n'.join([f'{k}: {v}' for k, v in msg.usage.__dict__.items() if 'tokens' in k]) + sep)
+
+>>> rainbow1 = '/path/to/Double-alaskan-rainbow.jpg' # from Wikipedia
+>>> conv = Conversation(Bot, [])
+>>> conv.register_callback('response_complete', show_usage_callback)
+>>> printmsg(conv.resume("please give a brief description of this picture.", \
+        with_files=[rainbow1], set_cache_checkpoint=True)) 
+
+- - - - - - - - - - - - - - - - - - - - 
+cache_creation_input_tokens: 1582
+cache_read_input_tokens: 0
+input_tokens: 4
+output_tokens: 142
+- - - - - - - - - - - - - - - - - - - - 
+
+This stunning photograph captures a person in a bright red jacket celebrating with raised arms 
+beneath a magnificent full rainbow arcing across a dramatic sky. The scene is set in what appears 
+to be an alpine or subarctic landscape, with rolling green hills covered in low vegetation and 
+shrubs. The sky shows a beautiful contrast between dark storm clouds and patches of blue sky, 
+creating the perfect conditions for this vivid rainbow. The lush, verdant terrain and the person's 
+joyful pose create a sense of wonder and appreciation for nature's spectacular display. There also 
+appears to be another person and possibly a dog visible in the distance, adding to the sense of 
+shared amazement at this natural phenomenon.
+
+>>> printmsg(conv.resume("where do you think it might have been taken?"))
+
+- - - - - - - - - - - - - - - - - - - - 
+cache_creation_input_tokens: 0
+cache_read_input_tokens: 1582
+input_tokens: 159
+output_tokens: 226
+- - - - - - - - - - - - - - - - - - - - 
+
+Based on the landscape characteristics in this image, I believe this was likely taken in Alaska, 
+possibly in Denali National Park or another area of the Alaskan interior. The terrain has the 
+distinctive look of Alaskan tundra - with the low-growing shrubs, rolling green hills, and that 
+particular type of vegetation that's common in subarctic regions.
+
+Other possible locations could include:
+- Northern Canada (Yukon Territory or Northwest Territories)
+- Iceland's highland regions
+- Northern Scandinavia (northern Norway, Sweden, or Finland)
+- Possibly the Scottish Highlands
+
+The vegetation pattern, the way the hills roll, and the overall ecosystem strongly suggest a 
+subarctic or boreal environment. The lush green appearance indicates this was taken during 
+the brief but vibrant growing season typical of these northern regions, likely in summer when 
+conditions are perfect for both the abundant plant growth and the dramatic weather that creates 
+such spectacular rainbows.
+
+Alaska seems most probable to me, given the specific combination of landscape features visible 
+in the photo.
+```
 
 # More to come, watch this space! :)
