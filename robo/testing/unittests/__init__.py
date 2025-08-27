@@ -13,9 +13,9 @@ from robo import *
 from robo.exceptions import *
 from robo.tools import *
 from robo.testing.fakeanthropic import *
+from robo.streamwrappers import StreamWrapper, AsyncStreamWrapper
 
 from io import StringIO, BytesIO
-# from importlib import reload
 from types import SimpleNamespace
 
 
@@ -920,6 +920,35 @@ class TestToolExecutedCallbacks(CallbackConversationVariantTester):
             print('assertions passed')
         
         self.run_variant_tests(test_wrapper, check_successful, ['calculate'])
+
+
+class TestBaseStreamWrappers:
+    """Because the ToolUse StreamWrapper variants are used by default, some lines of code get overlooked
+    in the usual flows. Testing directly for code coverage purposes.
+    """
+    def test_streamwrapper_base(self):
+        fsm = FakeStreamManager(['Hello'])
+        conv = Conversation(Bot(client=create_fake_client()), [], stream=True)
+        with StreamWrapper(fsm, conv) as sw:
+            accumulated = ''
+            for chunk in sw.text_stream:
+                accumulated += chunk
+            assert accumulated == 'Hello'
+
+    def test_streamwrapper_async_base(self):
+        fsm = FakeAsyncStreamManager(['Hello'])
+        conv = Conversation(Bot(client=create_fake_async_client()), [], async_mode=True, stream=True)
+        
+        fsm = FakeAsyncStreamManager(['Hello2'])
+        async def wrapper():
+            accumulated = ''
+            async with AsyncStreamWrapper(fsm, conv) as stream:
+                async for chunk in stream.text_stream:
+                    accumulated += chunk
+            return accumulated
+        
+        result = asyncio.run(wrapper())
+        assert result == 'Hello2'
 
 
 class TestConversationStartMethods:
