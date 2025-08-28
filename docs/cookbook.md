@@ -14,7 +14,7 @@ Welcome to the Cookbook, where you can learn by doing with concrete examples of 
     - [Fields](#fields)
     - [Selecting specific models and setting output token limits](#selecting-specific-models-and-setting-output-token-limits)
     - [Different ways of setting up a Conversation](#different-ways-of-setting-up-a-conversation)
-- [Asynchronous mode](#asynchronous-mode)
+- [Synchronous, Asynchronous, Streaming and Flat modes](#synchronous-asynchronous-streaming-and-flat-modes)
 - [One-shot](#one-shot)
 - [Dynamic system prompts and system prompt caching](#dynamic-system-prompts-and-system-prompt-caching)
 - [Tool use](#tool-use)
@@ -217,7 +217,7 @@ One more thing, if you wish to use method 4 to begin a conversation with a bot t
 >>> conv = Conversation(Bot, [])
 ```
 
-## Synchronous, Asynchronous, Streaming and Flat
+## Synchronous, Asynchronous, Streaming and Flat modes
 
 As well as streaming and flat responses (discussed earlier), RoboOp supports `asyncio` asynchronous operation alongside the standard synchronous . As a result, there are four basic modes in RoboOp - synchronous flat, synchronous streaming, asynchronous flat, and asynchronous streaming. Let's briefly overview how to use each of there.
 
