@@ -370,10 +370,10 @@ Now let's add fields into a dynamic prompt:
 from pathlib import Path
 
 class LiterarySterotypeAssistant(Bot):
+    fields = ['COUNTRY']
     def sysprompt_generate(self):
         datadir = Path('/path/to/data/')
         novella_text = (datadir / 'george-orwell-animal-farm.txt').read_text()
-        fields = ['COUNTRY']
         return [
             self._make_sysprompt_segment("""You are a librarian. You love to discuss literature 
             but you do so in a way that makes extensive use of slang and other stereotypical speech 
@@ -551,7 +551,9 @@ and cultural discourse.
 
 Note the use of Python type hinting to specify the types of the function parameters. This allows for automatic generation of the tool schema. The tools may be defined inline in the `Bot` class (as shown here) or defined externally and referenced in the `tools` list in the same way.
 
-(Note that object-oriented tool definitions are quite new and somewhat experimental; if you need finer-grained control over tool schema generation, you can override `get_tools_schema()` in a subclass of `Bot`.)
+While the tool call above returns a `str` of plain text (in this case, HTML pulled directly from the Wikipedia page) you can instead return other data types such as `dict`, `list`, `int` etc and it will generally "just work" as long as the structure is sufficiently verbose and/or self-explanatory for the model to understand. Basically anything which can serialise into JSON should be fine.
+
+(FYI, object-oriented tool definitions are quite new and somewhat experimental; if you need finer-grained control over tool schema generation, you can override `get_tools_schema()` in a subclass of `Bot`.)
 
 ### Asynchronous tools
 
@@ -574,25 +576,31 @@ class TimerBot(Bot):
         def call_sync(self, seconds: float):
             import time
             time.sleep(seconds)
-            return f"Synchronous timer finished! {seconds} seconds have elapsed."
+            return dict(
+                message = 'Timer complete',
+                timer_type = 'Synchronous',
+                seconds_elapsed = seconds
+            )
         
         async def call_async(self, seconds: float):
             await asyncio.sleep(seconds)
-            return f"Asynchronous timer finished! {seconds} seconds have elapsed."
+            return dict(
+                message = 'Timer complete',
+                timer_type = 'Asynchronous',
+                seconds_elapsed = seconds
+            )
     
     tools = [StartTimer]
 
 >>> conv = Conversation(TimerBot, [])
 >>> printmsg(conv.resume('five second timer please'))
-The timer has finished! 5 seconds have elapsed. This was a synchronous timer, meaning it completed in
-real-time.
+Timer complete! The 5-second timer has finished. This was a synchronous timer that ran for exactly 5 seconds.
 >>> conv = Conversation(TimerBot, [], async_mode=True)
 >>> printmsg(asyncio.run(conv.aresume('seven second timer please')))
-Time's up! Your 7-second timer has finished. This was an asynchronous timer, meaning it ran in the 
-background and completed automatically.
+Time's up! Your 7-second timer has finished. This was an asynchronous timer, meaning it ran in the background and completed after the specified duration.
 ```
 
-Note the use of `call_sync` and `call_async` instead of `__call__`. It's not a good idea to mix these notations - if using tool calls in synchronous mode meets your needs, it's best to stick to the `__call__` notation (since if `call_sync` and `call_async` are not provided, RoboOp will automatically fall back to `__call__`). If you decide to add async support later, you can simply rename `__call__` to `call_sync` before adding your `call_async` implementation.
+In this example the model is notified of the run mode of the tool call, but in typical cases it wouldn't know the difference - RoboOp invisibly routes the request to the correct variant (sync or async) if it exists. Note the use of `call_sync` and `call_async` instead of `__call__`. It's not a good idea to mix these notations - if using tool calls in synchronous mode meets your needs, it's best to stick to the `__call__` notation (since if `call_sync` and `call_async` are not provided, RoboOp will automatically fall back to `__call__`). If you decide to add async support later, you can simply rename `__call__` to `call_sync` before adding your `call_async` implementation.
 
 ## File handling
 
@@ -620,7 +628,7 @@ striking and cheerful composition that captures the essence of a perfect summer 
 >>> 
 ```
 
-Besides the raw data of the file, the Claude API needs to know the MIME type of the file and the type of content block it will be enclosed in. Valid content block types are `document`, `image`, and `container_upload`.
+Besides the raw data of the file, the Claude API needs to know the MIME type of the file and the type of content block it will be enclosed in. Valid content block types are `document`, `image`, and `container_upload` (more info at the Claude API docs [here](https://docs.anthropic.com/en/docs/build-with-claude/files)).
 In the example above, the file is referenced as a path on the local system, in which case RoboOp will attempt to infer the MIME type and content block type from the file's extension.
 
 For finer-grained control, you can refer to the file in what we call "filespec" form, which is a three-tuple of `(mimetype, file_bytes_object_or_path, content_block_type)`. `file_bytes_object_or_path` can be any of:
