@@ -219,7 +219,7 @@ One more thing, if you wish to use method 4 to begin a conversation with a bot t
 
 ## Synchronous, Asynchronous, Streaming and Flat modes
 
-As well as streaming and flat responses (discussed earlier), RoboOp supports `asyncio` asynchronous operation alongside the standard synchronous . As a result, there are four basic modes in RoboOp - synchronous flat, synchronous streaming, asynchronous flat, and asynchronous streaming. Let's briefly overview how to use each of there.
+As well as streaming and flat responses (discussed earlier), RoboOp supports `asyncio` asynchronous operation alongside the standard synchronous approach. As a result, there are four basic modes in RoboOp - synchronous flat, synchronous streaming, asynchronous flat, and asynchronous streaming. Let's briefly overview how to use each of there.
 
 ### Synchronous flat
 
@@ -337,7 +337,7 @@ class LiteraryAssistant(Bot):
         sysprompt_segments = [
             self._make_sysprompt_segment("""You are a knowledgeable literary assistant. The text 
                 of a well-known novella is provided to you so that you can answer questions about it."""),
-            self._make_sysprompt_segment(novella_text, set_cache_control=True)
+            self._make_sysprompt_segment(novella_text, set_cache_checkpoint=True)
         ]
         return sysprompt_segments
 
@@ -362,7 +362,7 @@ thoroughly hopeless Gregor's circumstances become, making it a perfect example o
 vision of modern alienation.
 ```
 
-There are a few things here worth noting. `Bot._make_sysprompt_segment(...)` has been provided as a convenient way of generating the correct segment structure for a multi-segment text-only system prompt. The `set_cache_control` argument, when set `True`, adds cache control clauses to the segment that enable system prompt caching. For large system prompts, prompt caching is highly recommended as it can significantly reduce costs. It's worth taking a look at [Anthropic's prompt caching documentation](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) to better understand the subject, but put simply, `set_cache_control=True` is best used on the last segment of the system prompt that is unlikely to change between requests.
+There are a few things here worth noting. `Bot._make_sysprompt_segment(...)` has been provided as a convenient way of generating the correct segment structure for a multi-segment text-only system prompt. The `set_cache_checkpoint` argument, when set `True`, adds cache control clauses to the segment that enable system prompt caching. For large system prompts, prompt caching is highly recommended as it can significantly reduce costs. It's worth taking a look at [Anthropic's prompt caching documentation](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) to better understand the subject, but put simply, `set_cache_checkpoint=True` is best used on the last segment of the system prompt that is unlikely to change between requests.
 
 Now let's add fields into a dynamic prompt:
 
@@ -379,7 +379,7 @@ class LiterarySterotypeAssistant(Bot):
             but you do so in a way that makes extensive use of slang and other stereotypical speech 
             patterns distinct to your place of origin. You will be provided with the text of a 
             novella so that you can discuss it with the user."""),
-            self._make_sysprompt_segment(novella_text, set_cache_control=True),
+            self._make_sysprompt_segment(novella_text, set_cache_checkpoint=True),
             self._make_sysprompt_segment("""Your place of origin is {{COUNTRY}}.""")
         ]
 
@@ -409,11 +409,11 @@ or are you more interested in Orwell's take on revolutionary ideals gone pear-sh
 
 Notice that:
 - The prompt segment with the dynamic field is a dedicated final segment
-- The segment with `set_cache_control` is the one immediately before it.
+- The segment with `set_cache_checkpoint` is the one immediately before it.
 
-The reason for this is that prompt caching applies to all segments up to and including the one where `set_cache_control` is used. Prompt caching relies on the inputs being the same up to the cache control clause - if anything at all changes, the cache will miss - so the pattern of packing a final segment with the dynamic fields and caching up to the segment prior maximises the cacheability of your system prompt.
+The reason for this is that prompt caching applies to all segments up to and including the one where `set_cache_checkpoint` is used. Prompt caching relies on the inputs being the same up to the cache control clause - if anything at all changes, the cache will miss - so the pattern of packing a final segment with the dynamic fields and caching up to the segment prior maximises the cacheability of your system prompt.
 
-Note that you can use `set_cache_control` on multiple (up to four) system prompt segments. Have a read of the Anthropic docs (linked above) for more on this.
+Note that you can use `set_cache_checkpoint` on multiple (up to four) system prompt segments. Have a read of the Anthropic docs (linked above) for more on this.
 
 LLMs are very flexible about the type of textual data you can include in system prompts - as well as understanding structured data formats such as JSON, YAML and HTML, generally if a human would find something easy to understand then an LLM almost certainly will too. It's worth keeping your token count in mind - for example if you have JSON or YAML data with a repetitive structure, it might be worth reformatting it as CSV or similar so that you're not squandering tokens on repeating the same field names over and over. In fact, the LLM can help with this:
 

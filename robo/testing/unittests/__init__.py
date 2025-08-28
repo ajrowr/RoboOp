@@ -465,7 +465,7 @@ class TestFileHandling:
 class TestGeneratorFunctions:
     def test_sysprompt_segment_generate(self):
         assert Bot._make_sysprompt_segment('test input1') == {'type': 'text', 'text': 'test input1'}
-        assert Bot._make_sysprompt_segment('test input2', set_cache_control=True) == {'type': 'text', 'text': 'test input2', 'cache_control': {'type': 'ephemeral'}}
+        assert Bot._make_sysprompt_segment('test input2', set_cache_checkpoint=True) == {'type': 'text', 'text': 'test input2', 'cache_control': {'type': 'ephemeral'}}
     
     _example_sysprompt = """example sysprompt"""
     
@@ -483,7 +483,7 @@ class TestGeneratorFunctions:
             def sysprompt_generate(self):
                 return [
                     self._make_sysprompt_segment("""test1"""),
-                    self._make_sysprompt_segment("""test2""", set_cache_control=True),
+                    self._make_sysprompt_segment("""test2""", set_cache_checkpoint=True),
                     self._make_sysprompt_segment("""{{TESTFIELD}}"""),
                 ]
         
@@ -968,6 +968,7 @@ class TestMessagesCaching(CallbackConversationVariantTester):
             ('test input 4', {'set_cache_checkpoint':True}), 
             'test input 5',
         ])
+
 
 class TestBaseStreamWrappers:
     """Because the ToolUse StreamWrapper variants are used by default, some lines of code get overlooked

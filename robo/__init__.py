@@ -80,10 +80,10 @@ class Bot(object):
             Is NOT compatible with tool use!"""
     
     @staticmethod
-    def _make_sysprompt_segment(text, set_cache_control=False):
+    def _make_sysprompt_segment(text, set_cache_checkpoint=False):
         return {
             **{'type': 'text', 'text': text}, 
-            **({'cache_control': {'type': 'ephemeral'}} if set_cache_control else {})
+            **({'cache_control': {'type': 'ephemeral'}} if set_cache_checkpoint else {})
         }
     
     @property
