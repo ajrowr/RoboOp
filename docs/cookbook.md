@@ -217,35 +217,57 @@ One more thing, if you wish to use method 4 to begin a conversation with a bot t
 >>> conv = Conversation(Bot, [])
 ```
 
-And now, on to the new stuff!
+## Synchronous, Asynchronous, Streaming and Flat
 
-## Asynchronous mode
+As well as streaming and flat responses (discussed earlier), RoboOp supports `asyncio` asynchronous operation alongside the standard synchronous . As a result, there are four basic modes in RoboOp - synchronous flat, synchronous streaming, asynchronous flat, and asynchronous streaming. Let's briefly overview how to use each of there.
 
-RoboOp fully supports Python asynchronous coding, with `Conversation.start(...)` and `Conversation.resume(...)` having asynchronous counterparts in `Conversation.astart(...)` and `Conversation.aresume(...)`. You'll need to instanciate the `Conversation` with an argument of `async_mode=True`. For example:
+### Synchronous flat
 
 ```python
->>> import asyncio
->>> conv = Conversation(Bot, async_mode=True)
->>> coroutine = conv.astart("Hi!")
->>> printmsg(asyncio.run(coroutine))
-Hello! How are you doing today? Is there anything I can help you with?
->>> coro2 = conv.aresume("What's the largest prime number less than one million?")
->>> printmsg(asyncio.run(coro2))
-The largest prime number less than one million is 999,983.
+conversation = Conversation(Bot).prestart()
+msg = conversation.resume("Hi!")
+```
 
-To find this, I need to work backwards from 999,999 and check each number for primality. Since we want the 
-largest prime less than 1,000,000, I start checking from 999,999 and work downward:
+### Synchronous streaming
 
-- 999,999 = 3³ × 7 × 11 × 13 × 37 (composite)
-- 999,998 is even (composite)
-- 999,997 is composite
-- And so on...
+```python
+conversation = Conversation(Bot, stream=True).prestart()
+with conversation.resume("Hi!") as stream:
+    for chunk in stream.text_stream:
+        print(chunk, end='', flush=True)
+```
 
-When we get to 999,983, this number passes all primality tests - it's not divisible by any prime up to its 
-square root (approximately 1,000), making it prime.
+### Asynchronous flat
+
+```python
+import asyncio
+
+conversation = Conversation(Bot, async_mode=True).prestart()
+
+async def get_flat_response():
+    return await conversation.aresume("Hi!")
+
+msg = asyncio.run(get_flat_response())
+```
+
+### Asynchronous streaming
+
+```python
+import asyncio
+
+conversation = Conversation(Bot, stream=True, async_mode=True).prestart()
+
+async def print_streaming_response():
+    async with await conversation.aresume("Hi!") as stream:
+        async for chunk in stream.text_stream:
+            print(chunk, end='', flush=True)
+
+asyncio.run(print_streaming_response())
 ```
 
 Note that a `robo.exceptions.SyncAsyncMismatchError` will be raised if an attempt is made to use the async API of a synchronous `Conversation`, or vice versa.
+
+And now, on to the new stuff!
 
 ## One-shot
 
