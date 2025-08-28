@@ -219,7 +219,7 @@ One more thing, if you wish to use method 4 to begin a conversation with a bot t
 
 ## Synchronous, Asynchronous, Streaming and Flat modes
 
-As well as streaming and flat responses (discussed earlier), RoboOp supports `asyncio` asynchronous operation alongside the standard synchronous approach. As a result, there are four basic modes in RoboOp - synchronous flat, synchronous streaming, asynchronous flat, and asynchronous streaming. Let's briefly overview how to use each of there.
+As well as streaming and flat responses (discussed earlier), RoboOp supports `asyncio` asynchronous operation alongside the standard synchronous approach. As a result, there are four basic modes for a `Conversation` object - synchronous flat, synchronous streaming, asynchronous flat, and asynchronous streaming. Let's briefly overview how to use each of these.
 
 ### Synchronous flat
 
