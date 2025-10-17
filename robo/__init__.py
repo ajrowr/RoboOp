@@ -1,8 +1,22 @@
+
+import os
+
+API_KEY_FILE = None ## In case you want to load it from a file 
+API_KEY_ENV_VAR = None ## If you want to use a different env var instead of ANTHROPIC_API_KEY
+
+def _populate_apikey_vars():
+    global API_KEY_FILE, API_KEY_ENV_VAR
+    API_KEY_FILE = os.environ.get('ROBO_API_KEY_FILE', None)
+    API_KEY_ENV_VAR = None
+
+_populate_apikey_vars()
+
 import anthropic
 
-from .models import MODELS
+from .models import CLAUDE, MODELS
 from .exceptions import *
 from .streamwrappers import *
+from .utils import _get_api_key
 
 from pathlib import Path
 import os
@@ -22,17 +36,6 @@ StreamWrapperType = TypeVar('StreamWrapperType', bound='StreamWrapper')
 StreamWrapperAsyncType = TypeVar('StreamWrapperAsyncType', bound='AsyncStreamWrapper')
 BotType = TypeVar('BotType', bound='Bot')
 
-
-API_KEY_FILE = None ## In case you want to load it from a file 
-API_KEY_ENV_VAR = None ## If you want to use a different env var instead of ANTHROPIC_API_KEY
-
-def _populate_apikey_vars():
-    global API_KEY_FILE, API_KEY_ENV_VAR
-    API_KEY_FILE = os.environ.get('ROBO_API_KEY_FILE', None)
-    API_KEY_ENV_VAR = None
-
-_populate_apikey_vars()
-
 STREAM_WRAPPER_CLASS_SYNC = StreamWrapperWithToolUse
 STREAM_WRAPPER_CLASS_ASYNC = AsyncStreamWrapperWithToolUse
 
@@ -45,14 +48,6 @@ MEDIA_TYPE_MAP = {
     '.pdf': ('application/pdf', 'document'),
 }
 
-def _get_api_key():
-    if API_KEY_FILE:
-        return open(API_KEY_FILE).read()
-    elif API_KEY_ENV_VAR:
-        return os.environ[API_KEY_ENV_VAR]
-    ## If neither, then returning None will let Anthropic check its default of ANTHROPIC_API_KEY
-
-
 def _get_client_class(async_mode=False): # pragma: no cover
     if async_mode:
         return anthropic.AsyncAnthropic
@@ -60,7 +55,6 @@ def _get_client_class(async_mode=False): # pragma: no cover
 
 def _get_client(async_mode=False): # pragma: no cover
     return _get_client_class(async_mode=async_mode)(api_key=_get_api_key())
-
 
 class Bot(object):
     """A bot that can engage in conversations via Claude models.
@@ -244,7 +238,7 @@ class Bot(object):
         return json.loads(sysp) if remap else sysp
     
     def __init__(self, client=None, async_mode=False):
-        for f, v in [('model', MODELS.CLAUDE_4.SONNET), ('temperature', 1), ('fields', []), 
+        for f, v in [('model', CLAUDE.SONNET.LATEST), ('temperature', 1), ('fields', []),
                     ('max_tokens', 8192), ('oneshot', False), ('welcome_message', None),
                     ('soft_start', False)]:
             if not hasattr(self, f):
@@ -1081,4 +1075,4 @@ To use streamer_async :
 >>> asyncio.run(coro)
 """
 
-__all__ = ['Bot', 'Conversation', 'LoggedConversation', 'streamer', 'streamer_async', 'gettext', 'getjson', 'printmsg', 'MODELS']
+__all__ = ['Bot', 'Conversation', 'LoggedConversation', 'streamer', 'streamer_async', 'gettext', 'getjson', 'printmsg', 'MODELS', 'CLAUDE']

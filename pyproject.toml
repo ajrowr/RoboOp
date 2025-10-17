@@ -27,7 +27,10 @@ keywords = [
     "microframework",
     "api-wrapper"
 ]
-dependencies = ["anthropic"]
+dependencies = [
+    "anthropic",
+    "platformdirs>=4.5.0",
+]
 classifiers = [
     # Development Status
     "Development Status :: 4 - Beta",

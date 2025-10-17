@@ -128,6 +128,15 @@ class TimerBot(Bot):
     }
 
 
+class TestModelFamilies:
+    def test_model_families(self):
+        from robo.models import CLAUDE
+        assert issubclass(type(CLAUDE.HAIKU), dict)
+        assert issubclass(type(CLAUDE.SONNET), dict)
+        assert issubclass(type(CLAUDE.OPUS), dict)
+        assert type(CLAUDE.OPUS.LATEST) is str
+
+
 class TestAsyncToolCalls:
     def test_async_tool_defs(self):
         class TestTool(Tool):
