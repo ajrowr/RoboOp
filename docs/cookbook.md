@@ -186,9 +186,17 @@ dict_keys(['claude-sonnet-4-5-20250929', 'claude-sonnet-4-20250514', 'claude-3-7
      'claude-3-5-sonnet-20241022', 'claude-3-5-sonnet-20240620', '4.5', '4', '3.7', '3.5', '4.0'])
 ```
 
-The default is `CLAUDE.SONNET.LATEST` which should be suitable for most purposes, but if you're putting something into production you might want to pin to a specific version to help keep things predictable.
+The default is `CLAUDE.SONNET.LATEST` which should be suitable for most purposes, but if you're putting something into production you might want to pin to a specific model tag to help keep things predictable.
 
-The models list is derived from Anthropic's API, which is checked on first invocation and cached for seven days. You can adjust the cache lifetime by setting `ROBO_MODELCACHE_MAX_AGE` environment variable to an integer number (or disable caching by setting it to 0). Anthropic tends to release release new models every few months.
+The models list is lazy-loaded from Anthropic's API when needed and cached for seven days. You can adjust the cache lifetime by setting the `ROBO_MODELCACHE_MAX_AGE` environment variable to an integer number (or disable caching by setting it to 0). Anthropic tends to release new models every few months. If you wish to bypass the dynamic resolution altogether you can simply set `Bot.model` to the model tag as a plain string. For example:
+
+```python
+class AnimalBot(Bot):
+    model = 'claude-haiku-4-5-20251001'
+    # ... etc
+```
+
+This will pin the class to always use a specific model, irrespective of new ones that come out.
 
 ### Different ways of setting up a Conversation
 
