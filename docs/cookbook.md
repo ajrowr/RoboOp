@@ -188,7 +188,7 @@ dict_keys(['claude-sonnet-4-5-20250929', 'claude-sonnet-4-20250514', 'claude-3-7
 
 The default is `CLAUDE.SONNET.LATEST` which should be suitable for most purposes, but if you're putting something into production you might want to pin to a specific model tag to help keep things predictable.
 
-The models list is lazy-loaded from Anthropic's API when needed and cached for seven days. You can adjust the cache lifetime by setting the `ROBO_MODELCACHE_MAX_AGE` environment variable to an integer number (or disable caching by setting it to 0). Anthropic tends to release new models every few months. If you wish to bypass the dynamic resolution altogether you can simply set `Bot.model` to the model tag as a plain string. For example:
+The models list is lazy-loaded from Anthropic's API when needed and cached for seven days. You can adjust the cache lifetime by setting the `ROBO_MODELCACHE_MAX_AGE` environment variable to an integer number of seconds (or disable caching by setting it to 0). Anthropic tends to release new models every few months. If you wish to bypass the dynamic resolution altogether you can simply set `Bot.model` to the model tag as a plain string. For example:
 
 ```python
 class AnimalBot(Bot):
