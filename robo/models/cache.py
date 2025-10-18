@@ -49,4 +49,8 @@ def get_cached_models():
 
 @lru_cache(maxsize=1)
 def model_data(refresh=False):
-    return get_cached_models()
+    if CACHE_MAX_AGE > 0:
+        return get_cached_models()
+    else:
+        return get_latest()
+

@@ -72,11 +72,11 @@ until the stream finishes being consumed by your code, so keep an eye on that!)
 Now for an example with a system prompt, interpolable fields and a specific model:
 
 ```python
-from robo import Bot, Conversation, MODELS
+from robo import Bot, Conversation, CLAUDE
 
 class Animal(Bot):
-    model = MODELS.LATEST_HAIKU ## don't really need the awesome power of Sonnet 4 for this
-    max_tokens = 8192 ## ... but Haiku doesn't like our default output token limit of 20k
+    model = CLAUDE.HAIKU.LATEST ## don't really need the awesome power of Sonnet 4 for this
+    max_tokens = 8192 ## set maximum output token count
     fields = ['ANIMAL_TYPE']
     sysprompt_text = """You are a {{ANIMAL_TYPE}}."""
     temperature = 1

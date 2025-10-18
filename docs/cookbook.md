@@ -151,10 +151,10 @@ San Francisco's a sight, so they say!
 ### Selecting specific models and setting output token limits
 
 ```python
-from robo import Bot, MODELS, streamer
+from robo import Bot, streamer, models, CLAUDE
 class AnimalBot(Bot):
-    model = MODELS.LATEST_HAIKU
-    max_tokens = 8192
+    model = models.CLAUDE.HAIKU.LATEST ## or just CLAUDE.HAIKU.LATEST
+    max_tokens = 8192 ## current Haiku model increased this but leaving it in for illustrative purposes
     fields = ['ANIMAL_TYPE']
     sysprompt_text = """Respond with a stereotypical sound made by a {{ANIMAL_TYPE}}."""
 
@@ -164,7 +164,31 @@ Quack!
 >>> 
 ```
 
-Check `robo/models.py` for the models list, or just `dir(MODELS)` will do the trick. Default is `LATEST_SONNET` which represents a good tradeoff between price and performance for typical applications.
+`robo.models.CLAUDE` contains each of the three model families - `HAIKU`, `SONNET`, and `OPUS`. [Anthropic's overview](https://docs.claude.com/en/docs/about-claude/models/overview) is worth a read, but in general terms Haiku is fastest and cheapest but somewhat less capable; Opus is super powerful but quite expensive; and Sonnet is in the middle - pretty clever, reasonably fast and fairly economical - and is generally considered the go-to model for most tasks.
+
+The model families are represented by a subclass of `dict`, so you can get specific models by a key as well as using `.LATEST` for the most current version. So, all of these are valid:
+
+```python
+>>> from robo.models import CLAUDE
+>>> CLAUDE.HAIKU['4.5']
+'claude-haiku-4-5-20251001'
+>>> CLAUDE.SONNET['claude-sonnet-4-5-20250929'] ## using Anthropic's version tag
+'claude-sonnet-4-5-20250929'
+>>> CLAUDE.OPUS.LATEST
+'claude-opus-4-1-20250805'
+```
+
+And you can easily check which specific versions are available:
+
+```python
+>>> CLAUDE.SONNET.keys()
+dict_keys(['claude-sonnet-4-5-20250929', 'claude-sonnet-4-20250514', 'claude-3-7-sonnet-20250219',
+     'claude-3-5-sonnet-20241022', 'claude-3-5-sonnet-20240620', '4.5', '4', '3.7', '3.5', '4.0'])
+```
+
+The default is `CLAUDE.SONNET.LATEST` which should be suitable for most purposes, but if you're putting something into production you might want to pin to a specific version to help keep things predictable.
+
+The models list is derived from Anthropic's API, which is checked on first invocation and cached for seven days. You can adjust the cache lifetime by setting `ROBO_MODELCACHE_MAX_AGE` environment variable to an integer number (or disable caching by setting it to 0). Anthropic tends to release release new models every few months.
 
 ### Different ways of setting up a Conversation
 
