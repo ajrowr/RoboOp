@@ -1,5 +1,6 @@
 
 import os
+import asyncio
 
 API_KEY_FILE = None ## In case you want to load it from a file 
 API_KEY_ENV_VAR = None ## If you want to use a different env var instead of ANTHROPIC_API_KEY
@@ -597,8 +598,7 @@ class Conversation(object):
             callback_wrapper(registered_callback)
     
     async def _aexecute_callbacks(self, callback_name, callback_wrapper):
-        for registered_callback in self._lookup_callbacks(callback_name):
-            await callback_wrapper(registered_callback)
+        await asyncio.gather(*[callback_wrapper(callback_coro) for callback_coro in self._lookup_callbacks(callback_name)])
     
     def count_tokens(self, message:str, with_files:list=[]):
         compiled_messages = self._get_conversation_context() + [
