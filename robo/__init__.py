@@ -480,9 +480,9 @@ class Conversation(object):
         for tub in self.tool_use_blocks.pending:
             if tub.status == 'PENDING':
                 tub.response = await self.bot.ahandle_tool_call(tub.request, toolcontext=self.tool_context)
-                def tool_executed_callback_wrapper(callback_function):
-                    callback_function(self, (tub.request, tub.response))
-                self._execute_callbacks('tool_executed', tool_executed_callback_wrapper)
+                async def tool_executed_callback_wrapper(callback_function):
+                    await callback_function(self, (tub.request, tub.response))
+                await self._aexecute_callbacks('tool_executed', tool_executed_callback_wrapper)
                 if (target := tub.response['target']) == 'model':
                     tub.status = 'READY'
                 elif target == 'client':
@@ -907,9 +907,9 @@ class Conversation(object):
                 resps = self._compile_tool_responses()
                 return await self._aresume_flat(resps, is_tool_message=True)
         
-        def response_complete_callback_wrapper(callback_function):
-            callback_function(self, (message_out,))
-        self._execute_callbacks('response_complete', response_complete_callback_wrapper)
+        async def response_complete_callback_wrapper(callback_function):
+            await callback_function(self, (message_out,))
+        await self._aexecute_callbacks('response_complete', response_complete_callback_wrapper)
         
         return message_out
     

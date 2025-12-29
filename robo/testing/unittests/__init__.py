@@ -889,8 +889,18 @@ class TestCallbacksStructure(CallbackConversationVariantTester):
                 msg, = data_tuple
                 sio.write(gettext(msg))
                 conv_retained = conv
+            async def callback_function_async(conv, data_tuple):
+                nonlocal conv_retained, sio
+                assert type(data_tuple) is tuple
+                msg, = data_tuple
+                sio.write(gettext(msg))
+                conv_retained = conv
             conv = Conversation(Bot(client=self.get_client(conv_args)), [], **conv_args)
-            conv.register_callback('response_complete', callback_function)
+            if 'async_mode' in conv_args:
+                conv.register_callback('response_complete', callback_function_async)
+            else:
+                conv.register_callback('response_complete', callback_function)
+            print(conv_args)
             runner(conv, msgs_in)
             return sio, conv, conv_retained
     
@@ -914,8 +924,17 @@ class TestResponseCompleteCallbacks(CallbackConversationVariantTester):
                 msg, = data_tuple
                 conv_retained = conv
                 final_msg = msg
+            async def callback_function_async(conv, data_tuple):
+                nonlocal final_msg, conv_retained
+                assert type(data_tuple) is tuple
+                msg, = data_tuple
+                conv_retained = conv
+                final_msg = msg
             conv = Conversation(Bot(client=self.get_client(conv_args)), [], **conv_args)
-            conv.register_callback('response_complete', callback_function)
+            if 'async_mode' in conv_args:
+                conv.register_callback('response_complete', callback_function_async)
+            else:
+                conv.register_callback('response_complete', callback_function)
             runner(conv, msgs_in)
             return final_msg, conv, conv_retained
         
@@ -937,8 +956,16 @@ class TestToolExecutedCallbacks(CallbackConversationVariantTester):
                 nonlocal tool_req, tool_resp, conv_retained
                 conv_retained = conv
                 tool_req, tool_resp = tub
+            async def callback_function_async(conv, tub):
+                nonlocal tool_req, tool_resp, conv_retained
+                conv_retained = conv
+                tool_req, tool_resp = tub
             conv = Conversation(ToolTesterBot(client=self.get_client(conv_args)), [], **conv_args)
-            conv.register_callback('tool_executed', callback_function)
+            if 'async_mode' in conv_args:
+                conv.register_callback('tool_executed', callback_function_async)
+            else:
+                conv.register_callback('tool_executed', callback_function)
+            print("== Using conv args:", conv_args, "==")
             runner(conv, msgs_in)
             return tool_req, tool_resp, conv, conv_retained
         

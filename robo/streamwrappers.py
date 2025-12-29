@@ -118,7 +118,7 @@ class AsyncStreamWrapper:
             await self.conversation_obj._post_stream_hook_async()
             async def response_complete_callback_wrapper(callback_function):
                 final_message = await self.stream_context.get_final_message()
-                callback_function(self.conversation_obj, (final_message,))
+                await callback_function(self.conversation_obj, (final_message,))
             await self.conversation_obj._aexecute_callbacks('response_complete', response_complete_callback_wrapper)
         
         return result
