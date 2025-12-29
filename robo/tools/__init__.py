@@ -13,6 +13,12 @@ _types_map = {
 
 class Tool(object):
     __slots__ = ['name', 'description', 'parameter_descriptions', 'target']
+    def __init__(self, *args, **kwargs):
+        """If a tool_context exists, it will be passed in here as kwargs. If anything needs
+        to be done with it (for example stashing object references on the Tool instance), 
+        override __init__."""
+        pass
+    
     def __call__(self, *args, **kwargs):
         raise NotImplementedError("Please implement __call__ in a subclass")
     

@@ -110,11 +110,11 @@ class Bot(object):
     def get_tools_schema(klass) -> list:
         """Return the schema describing tools available to this bot.
         
-        Override this method to define tools that the bot can use during conversations.
-        Tool implementations should be provided as methods named 'tools_<toolname>'.
+        By default this uses autodiscovery of object-oriented tooldefs implemented as Tool subclasses and
+        registered with the Bot via the _tools_ slot.
         
-        Alternatively, Tool subclasses may be provided as a list on the `tools` attribute
-        of a subclass, in which case this function will query those to build a schema.
+        However if for some reason you want to directly build the tools schema, you can override this method.
+        But be sure and produce output compatible with Anthropic's tool schema format.
         
         Returns:
             list: Tool schema following Anthropic's API format
@@ -129,6 +129,16 @@ class Bot(object):
             return [tool.get_call_schema() for tool in tools]
         else:
             return []
+    
+    def get_tool_context(self):
+        """Arguments for a tool call come from the model, but some use cases may need a "sideband" way of making
+        other objects or data available to the tool (without making them available to the model). For example, 
+        a tool call that is part of a web application might need HTTP context objects, and/or ORM objects 
+        pre-configured to only have access to resources available to the logged-in user. Typically such 
+        things would be passed to the tool via the Conversation (see: Conversation.__init__), but this 
+        stub may be used as a fallback.
+        """
+        return {}
     
     def _configure_tool_call(self, tooluseblock):
         if type(tooluseblock) is dict:
@@ -149,12 +159,11 @@ class Bot(object):
         
         return (tooluseblock, tool, target)
     
-    def handle_tool_call(self, tooluseblock:dict | SimpleNamespace) -> dict:
-        """Execute a tool call based on the provided tool use block. Looks for a function to
-        handle the block, having the format:
-            def tool_<tooluseblock.name>(self, paramname1=None, paramname2=None, ...)
+    def handle_tool_call(self, tooluseblock:dict | SimpleNamespace, toolcontext:dict={}) -> dict:
+        """Execute a tool call based on the provided tool use block. Checks the Bot for a tool function
+        or registered callable class to handle the block.
         
-        The function returns a dict in the format: 
+        Such functions (or __call__ methods) return a dict in the format: 
             {
                 "target": "<'client' or 'model'>,
                 "message": <message for the client or the model, flexible format>
@@ -173,14 +182,14 @@ class Bot(object):
         if target is None:
             return tool(**tooluseblock.input)
         else:
-            return {'target': target, 'message': tool().call_sync(**tooluseblock.input)}
+            return {'target': target, 'message': tool(**toolcontext).call_sync(**tooluseblock.input)}
     
-    async def ahandle_tool_call(self, tooluseblock:dict | SimpleNamespace) -> dict:
+    async def ahandle_tool_call(self, tooluseblock:dict | SimpleNamespace, toolcontext:dict={}) -> dict:
         tooluseblock, tool, target = self._configure_tool_call(tooluseblock)
         if target is None:
             return tool(**tooluseblock.input)
         else:
-            return {'target': target, 'message': await tool().call_async(**tooluseblock.input)}
+            return {'target': target, 'message': await tool(**toolcontext).call_async(**tooluseblock.input)}
     
     @property
     def sysprompt_clean(self) -> str | dict:
@@ -295,9 +304,9 @@ class Conversation(object):
     """
     __slots__ = ['messages', 'bot', 'sysprompt', 'argv', 'max_tokens', 'message_objects', 
                 'is_streaming', 'started', 'is_async', 'oneshot',
-                'soft_started', 'tool_use_blocks'] + \
+                'soft_started', 'tool_use_blocks', 'tool_context'] + \
                 ['_callbacks_registered', '_message_cache_checkpoints']
-    def __init__(self, bot:BotType, argv:list|dict=None, stream:bool=False, async_mode:bool=False, soft_start:bool=None):
+    def __init__(self, bot:BotType, argv:list|dict=None, stream:bool=False, async_mode:bool=False, soft_start:bool=None, tool_context=None):
         self.is_async = async_mode
         if type(bot) is type:
             self.bot = bot(async_mode=async_mode)
@@ -306,6 +315,7 @@ class Conversation(object):
         self.max_tokens = self.bot.max_tokens
         self.oneshot = self.bot.oneshot
         self.messages = []
+        self.tool_context = tool_context if tool_context else self.bot.get_tool_context()
         self.message_objects = []
         self._callbacks_registered = defaultdict(list)
         self._message_cache_checkpoints = []
@@ -457,7 +467,7 @@ class Conversation(object):
     def _handle_pending_tool_requests(self):
         for tub in self.tool_use_blocks.pending:
             if tub.status == 'PENDING':
-                tub.response = self.bot.handle_tool_call(tub.request)
+                tub.response = self.bot.handle_tool_call(tub.request, toolcontext=self.tool_context)
                 def callback_wrapper(callback_function):
                     callback_function(self, (tub.request, tub.response))
                 self._execute_callbacks('tool_executed', callback_wrapper)
@@ -469,7 +479,7 @@ class Conversation(object):
     async def _ahandle_pending_tool_requests(self):
         for tub in self.tool_use_blocks.pending:
             if tub.status == 'PENDING':
-                tub.response = await self.bot.ahandle_tool_call(tub.request)
+                tub.response = await self.bot.ahandle_tool_call(tub.request, toolcontext=self.tool_context)
                 def callback_wrapper(callback_function):
                     callback_function(self, (tub.request, tub.response))
                 self._execute_callbacks('tool_executed', callback_wrapper)
