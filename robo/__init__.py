@@ -757,6 +757,10 @@ class Conversation(object):
     
         # Add the assistant's response to messages
         self.messages.append({'role': 'assistant', 'content': accumulated_context})
+        
+        def turn_complete_callback_wrapper(callback_function):
+            callback_function(self, (response_text,))
+        self._execute_callbacks('turn_complete', turn_complete_callback_wrapper)
     
         # Handle tool calls if conversation is not exhausted (i.e., if there are pending tool calls)
         if not self._is_exhausted():
@@ -893,7 +897,11 @@ class Conversation(object):
     
         # Add the assistant's response to messages
         self.messages.append({'role': 'assistant', 'content': accumulated_context})
-    
+        
+        async def turn_complete_callback_wrapper(callback_function):
+            await callback_function(self, (response_text,))
+        await self._aexecute_callbacks('turn_complete', turn_complete_callback_wrapper)
+        
         # Handle tool calls if conversation is not exhausted (i.e., if there are pending tool calls)
         if not self._is_exhausted():
             await self._ahandle_pending_tool_requests()

@@ -74,6 +74,10 @@ class StreamWrapperWithToolUse(StreamWrapper):
                     }
                     accumulated_context.append(ttxt)
             conv.messages.append({'role': 'assistant', 'content': accumulated_context})
+            
+            def turn_complete_callback_wrapper(callback_function):
+                callback_function(conv, (accumulated_text,))
+            conv._execute_callbacks('turn_complete', turn_complete_callback_wrapper)
     
             if not conv._is_exhausted():
                 conv._handle_pending_tool_requests()
@@ -168,6 +172,11 @@ class AsyncStreamWrapperWithToolUse(AsyncStreamWrapper):
                     }
                     accumulated_context.append(ttxt)
             conv.messages.append({'role': 'assistant', 'content': accumulated_context})
+            
+            async def turn_complete_callback_wrapper(callback_function):
+                await callback_function(conv, (accumulated_text,))
+            await conv._aexecute_callbacks('turn_complete', turn_complete_callback_wrapper)
+            
             self.accumulated_text_bypass = True
     
             if not conv._is_exhausted():

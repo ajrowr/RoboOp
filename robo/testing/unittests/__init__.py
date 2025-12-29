@@ -914,6 +914,45 @@ class TestCallbacksStructure(CallbackConversationVariantTester):
         self.run_variant_tests(test_wrapper, check_successful, [_IN1])
 
 
+class TestTurnCompleteCallbacks(CallbackConversationVariantTester):
+    def test_turn_complete_callback(self):
+        from itertools import count
+        def test_wrapper(runner, msgs_in, **conv_args):
+            final_msg, conv_retained, counterval = None, None, 0
+            counter_s, counter_a = count(1), count(1)
+            def callback_function(conv, data_tuple):
+                nonlocal final_msg, conv_retained, counter_s, counterval
+                counterval = next(counter_s)
+                assert type(data_tuple) is tuple
+                msg, = data_tuple
+                conv_retained = conv
+                final_msg = msg
+            async def callback_function_async(conv, data_tuple):
+                nonlocal final_msg, conv_retained, counter_a, counterval
+                counterval = next(counter_a)
+                assert type(data_tuple) is tuple
+                msg, = data_tuple
+                conv_retained = conv
+                final_msg = msg
+            conv = Conversation(Bot(client=self.get_client(conv_args)), [], **conv_args)
+            if 'async_mode' in conv_args:
+                conv.register_callback('turn_complete', callback_function_async)
+            else:
+                conv.register_callback('turn_complete', callback_function)
+            print("== Using conv args:", conv_args, "==")
+            runner(conv, msgs_in)
+            return final_msg, conv, conv_retained, counterval
+        
+        def check_successful(returned):
+            final_msg, conv, conv_retained, counterval = returned
+            assert issubclass(type(conv_retained), Conversation)
+            assert conv_retained == conv
+            assert final_msg == _OUT2
+            assert counterval == 2
+        
+        self.run_variant_tests(test_wrapper, check_successful, [_IN1, _IN2])
+
+
 class TestResponseCompleteCallbacks(CallbackConversationVariantTester):
     def test_response_complete_callback(self):
         def test_wrapper(runner, msgs_in, **conv_args):
