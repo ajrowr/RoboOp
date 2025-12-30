@@ -843,11 +843,11 @@ class CodeBot(Bot):
 ... 
 >>> conv = Conversation(CodeBot, [])
 >>> conv.register_callback('turn_complete', turn_complete_callback)
->>> response = conv.resume("Please make me a python program that prints 'Hello world' in all the colours the console can 
-    display. Place it in a subfolder called 'Umbrella' and encapsulate it in a Python package. When finished, run it so I
-    can see it in action.")
-thinking]> I'll create a Python program that prints "Hello world" in all console colors, package it properly in an "Umbrella" 
-    subfolder, and run it for you.
+>>> response = conv.resume("Please make me a python program that prints 'Hello world' in 
+    all the colours the console can display. Place it in a subfolder called 'Umbrella' and 
+    encapsulate it in a Python package. When finished, run it so I can see it in action.")
+thinking]> I'll create a Python program that prints "Hello world" in all console colors, 
+    package it properly in an "Umbrella" subfolder, and run it for you.
 Executing command: mkdir -p Umbrella
 thinking]> Now let me create the package structure with the necessary files:
 Writing 166 bytes to file: Umbrella/__init__.py
@@ -856,7 +856,8 @@ Writing 4703 bytes to file: Umbrella/colorful_hello.py
 Writing 700 bytes to file: Umbrella/README.md
 thinking]> Perfect! Now let's run the program to see it in action:
 Executing command: cd Umbrella && python -m Umbrella
-CompletedProcess(args='cd Umbrella && python -m Umbrella', returncode=1, stdout='', stderr='.venv/bin/python: No module named Umbrella\n')
+CompletedProcess(args='cd Umbrella && python -m Umbrella', returncode=1, stdout='', 
+    stderr='.venv/bin/python: No module named Umbrella\n')
 thinking]> Let me run it from the parent directory:
 Executing command: python -m Umbrella
 <... etc ...>
