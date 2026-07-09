@@ -25,6 +25,7 @@ import json
 import datetime
 import time
 import types
+import re
 from types import SimpleNamespace
 from collections import defaultdict
 
@@ -1079,7 +1080,8 @@ def gettext(message):
     return text_out
 
 def getjson(message):
-    return json.loads(gettext(message))
+    stripped = re.sub(r'^```(?:json|yaml)?\n?|```$', '', gettext(message).strip(), flags=re.MULTILINE).strip()
+    return json.loads(stripped)
 
 def printmsg(message):
     print(gettext(message))

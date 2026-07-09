@@ -4,15 +4,24 @@ from . import cache
 from .models_legacy import MODELS
 
 
-def _modelcode(inp):
-    return re.search(r'-(\d(-\d)?)-', inp).group(1).replace('-', '.')
+def _modelversion(inp):
+    try:
+        return re.search(r'-(\d+(?:-\d+)?)(?:-|$)', inp).group(1).replace('-', '.')
+    except AttributeError:
+        raise AttributeError(f"Could not parse model version '{inp}' from input")
 
 def _make_dataset(filterphrase=''):
     a = {m['id']:m['id'] for m in cache.model_data()['data'] if filterphrase in m['id']}
-    b = {_modelcode(m): m for m in a}
+    try:
+        b = {_modelversion(m): m for m in a}
+    except AttributeError as err:
+        print(f"WARNING: trouble parsing model version numbers (\"{err}\")")
+        b = {}
     c = {k+'.0':b[k] for k in b if '.' not in k}
     return dict(a | b | c)
 
+def _version_key(vstr):
+    return tuple(int(part) for part in vstr.split('.'))
 
 class ModelFamily(dict):
     def __init__(self, *args, filterphrase='', **kwargs):
@@ -29,7 +38,8 @@ class ModelFamily(dict):
     def _load_dataset(self):
         dataset = _make_dataset(self._filterphrase)
         self._dataset = dataset
-        self._latest = list(dataset.values())[0]
+        version_keys = [k for k in dataset if re.fullmatch(r'\d+(\.\d+)?', k)]
+        self._latest = dataset[max(version_keys, key=_version_key)]
         self.update(dataset)
         
     def __getattribute__(self, attrname):
@@ -86,6 +96,7 @@ class CLAUDE:
     HAIKU = ModelFamily(filterphrase='haiku')
     SONNET = ModelFamily(filterphrase='sonnet')
     OPUS = ModelFamily(filterphrase='opus')
+    FABLE = ModelFamily(filterphrase='fable')
 
 
 __all__ = ['CLAUDE', 'MODELS']

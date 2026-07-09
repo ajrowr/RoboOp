@@ -305,6 +305,8 @@ And now, on to the new stuff!
 
 As mentioned earlier, a typical conversation with an LLM proceeds by feeding the pre-existing conversation back into the model with a new user message appended. But some bots don't actually need that context (eg. bots that do one thing and one thing only, and whose behaviour is specified by the system prompt). For such bots, feeding in the prior conversational context is not only a waste of tokens (and hence, money) but can also confuse the bot. That's where `oneshot` comes in - setting a bot as one-shot bypasses these concerns by preventing conversational context from being included with a request.
 
+IMPORTANT: `oneshot` is not compatible with tool use!
+
 ```python
 from robo import *
 
@@ -831,7 +833,7 @@ class CodeBot(Bot):
             print("Executing command:", command)
             result = subprocess.run(command, shell=True, capture_output=True, text=True)
             if show_output:
-                print(result.stdout)
+                print(result)
             return f"stdout: {result.stdout}\nstderr: {result.stderr}\nreturn code: {result.returncode}"
     
     tools = [WriteFile, RunBash]

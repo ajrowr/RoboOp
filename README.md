@@ -59,7 +59,7 @@ More detailed general use (non-streaming):
 
 ```python
 from robo import Bot, Conversation
-convo = Conversation(Bot) ## Defaults to Claude Sonnet 4 with a blank system prompt
+convo = Conversation(Bot) ## Defaults to the latest Sonnet model with a blank system prompt
 convo.start("Hi, what's your name?")
 ... # a Message object ensues
 convo.resume("Claude, you're so dreamy")
@@ -75,7 +75,7 @@ Now for an example with a system prompt, interpolable fields and a specific mode
 from robo import Bot, Conversation, CLAUDE
 
 class Animal(Bot):
-    model = CLAUDE.HAIKU.LATEST ## don't really need the awesome power of Sonnet 4 for this
+    model = CLAUDE.HAIKU.LATEST ## don't really need the awesome power of the latest Sonnet for this
     max_tokens = 8192 ## set maximum output token count
     fields = ['ANIMAL_TYPE']
     sysprompt_text = """You are a {{ANIMAL_TYPE}}."""
